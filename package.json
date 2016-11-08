@@ -1,0 +1,68 @@
+{
+    "name": "cogs",
+    "displayName": "Cogs",
+    "description": "",
+    "version": "0.1.0",
+    "publisher": "Machtan",
+    "engines": {
+        "vscode": "^1.5.0"
+    },
+    "categories": [
+        "Languages", "Linters"
+    ],
+    "activationEvents": [
+        "onLanguage:rust"
+    ],
+    "main": "./out/src/extension",
+    "contributes": {
+        "languages": [
+            {
+                "id": "rust",
+                "extensions": [
+                    ".rs"
+                ]
+            }
+        ],
+        "commands": [
+            {
+                "command": "cogs.runLinter",
+                "title": "Rust: Run linter"
+            },
+            {
+                "command": "cogs.run",
+                "title": "Rust: Run or build the current file"
+            }
+        ],
+        "keybindings": [
+            {
+                "key": "ctrl+shift+l",
+                "mac": "cmd+shift+l",
+                "command": "cogs.runLinter",
+                "when": "editorLangId == 'rust'"
+            }
+        ],
+        "configuration": {
+            "title": "Cog Settings",
+            "type": "object",
+            "properties": {
+                "cogs.runLinterOnSave": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Run the linter every time a Rust file is saved"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "tsc -p ./",
+        "compile": "tsc -watch -p ./",
+        "postinstall": "node ./node_modules/vscode/bin/install"
+    },
+    "devDependencies": {
+        "typescript": "^2.0.3",
+        "vscode": "^1.0.0",
+        "mocha": "^2.3.3",
+        "@types/node": "^6.0.40",
+        "@types/mocha": "^2.2.32"
+    }
+}
