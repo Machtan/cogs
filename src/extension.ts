@@ -70,7 +70,6 @@ export function activate(context: ExtensionContext) {
 
     // ===== Register commands =====
 
-    // The command has been defined in the package.json file
     registerTextEditorCommand('cogs.run', () => {
         window.showInformationMessage('unimplemented!();');
     });
@@ -81,28 +80,40 @@ export function activate(context: ExtensionContext) {
 
     // ===== Add listeners =====
     context.subscriptions.push(workspace.onDidSaveTextDocument(document => {
-        if (document.fileName.endsWith(".rs") && settings.runLinterOnSave) {
-            //window.showInformationMessage("Saved rust document!");
+        window.showInformationMessage("Language ID: '"+document.languageId+"' lint on save: "+settings.runLinterOnSave);
+        if ((document.languageId === "rust") && settings.runLinterOnSave) {
+            window.showInformationMessage("Saved rust document!");
             runLinter(document.fileName);
         }
     }));
 
     context.subscriptions.push(workspace.onDidOpenTextDocument(document => {
         //window.showInformationMessage("Opened rust document: '" + document.fileName + "'");
-        if (!hasRunLinterOnce) {
-            runLinter(document.fileName);
-            hasRunLinterOnce = true;
+        if (document.languageId === "rust") {
+            bar.show();
+            if (!hasRunLinterOnce) {
+                runLinter(document.fileName);
+                hasRunLinterOnce = true;
+            }
+        } else {
+            bar.hide();
         }
     }));
 
     context.subscriptions.push(window.onDidChangeActiveTextEditor(editor => {
         if (editor === undefined) {
+            bar.hide();
             return;
         }
-        //window.showInformationMessage("Switched to rust document: '" + editor.document.fileName + "'");
-        if (!hasRunLinterOnce) {
-            runLinter(editor.document.fileName);
-            hasRunLinterOnce = true;
+        if (editor.document.languageId === "rust") {
+            bar.show();
+            //window.showInformationMessage("Switched to rust document: '" + editor.document.fileName + "'");
+            if (!hasRunLinterOnce) {
+                runLinter(editor.document.fileName);
+                hasRunLinterOnce = true;
+            }
+        } else {
+            bar.hide();
         }
     }));
 

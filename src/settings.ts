@@ -7,7 +7,7 @@ export class Settings {
     }
 
     update() {
-        let settings = workspace.getConfiguration();
+        let settings = workspace.getConfiguration("cogs");
         this.runLinterOnSave = settings["runLinterOnSave"];
     }
 }
