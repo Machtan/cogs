@@ -11,8 +11,7 @@ export function runLinterForProject(projectDir: string, dia: DiagnosticCollectio
         //console.log("Running linter in dir: '"+projectDir+"'");
         let cmd = "cargo check --message-format json";
         stdoutput = child_process.execSync(cmd, {cwd: projectDir}).toString("utf-8");
-    }
-    catch (e) {
+    } catch (e) {
         //vscode.window.showInformationMessage("Linter failed: " + e);
         stdoutput = e.stdout.toString("utf-8");
     }
@@ -25,8 +24,7 @@ export function runLinterForProject(projectDir: string, dia: DiagnosticCollectio
         let tree: any;
         try {
             tree = JSON.parse(line);
-        }
-        catch (e) {
+        } catch (e) {
             console.log("Could not parse JSON in line: "+line);
             return;
         }
@@ -67,7 +65,13 @@ export function runLinterForProject(projectDir: string, dia: DiagnosticCollectio
         //console.log("filename: "+filename);
         // Ensure that the erroring file is in this project at all.
         if (!fs.existsSync(filename)) {
-            return;
+            // Handle fatal errors
+            if (severity == DiagnosticSeverity.Error) {
+                vscode.window.showErrorMessage("Out-of-project error: "+line);
+            } else {
+                // Ignore out-of-project warnings.
+                return;
+            }
         }
         let diagnostics = map.get(filename);
         if (diagnostics === undefined) {

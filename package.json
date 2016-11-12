@@ -11,7 +11,8 @@
         "Languages", "Linters"
     ],
     "activationEvents": [
-        "onLanguage:rust"
+        "onLanguage:rust",
+        "workspaceContains:Cargo.toml"
     ],
     "main": "./out/src/extension",
     "contributes": {
