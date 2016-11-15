@@ -1,30 +1,35 @@
 'use strict';
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticCollection, TextEditor, TextEditorEdit} from 'vscode';
+import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticCollection, TextEditor, TextEditorEdit, DocumentFilter} from 'vscode';
 //import * as cap from './capabilities';
-import {runLinterForProject} from './diagnostics';
+import {runLinterForProject, runLinterForExample} from './linter';
 import {Settings} from './settings';
+import {RustCompleter} from './suggestions';
 import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import {findCrateRoot} from './common';
 
 let dia: DiagnosticCollection;
 let bar: StatusBarItem = window.createStatusBarItem(StatusBarAlignment.Left);
 let hasRunLinterOnce = false;
 let settings = new Settings();
+const RUST_MODE: DocumentFilter = {language: 'rust', scheme: 'file'};
 //let capabilities: cap.Capabilities;
 
-export function findCrateRoot(memberFilePath: string): string | null {
-    // Support build.rs
-    let dir = path.dirname(memberFilePath);
-    while (dir != "") {
-        if (fs.existsSync(path.join(dir, "Cargo.toml"))) {
-            return dir;
+
+export function isExample(filename: string): boolean {
+    let crate = findCrateRoot(filename);
+    let exampleDirPrefix = path.join(crate, "example", "");
+    if (filename.startsWith(exampleDirPrefix)) {
+        if (!filename.endsWith(".rs")) {
+            return false;
         }
-        dir = path.dirname(dir);
+        return true;
+    } else {
+        return false;
     }
-    return null;
 }
 
 export function runLinter(filename: string) {
@@ -32,7 +37,14 @@ export function runLinter(filename: string) {
     let crate = findCrateRoot(filename);
     if (crate !== null) {
         //window.showInformationMessage("Crate root: "+crate);
-        runLinterForProject(crate, dia);
+        if (isExample(filename)) {
+            let example = path.basename(filename, ".rs");
+            console.log(`Linting example '${example}'!`);
+            runLinterForExample(example, crate, dia);
+        } else {
+            console.log(`Linting project at '${crate}'`);
+            runLinterForProject(crate, dia);
+        }
         updateLastLintTime();
     } else {
         window.showErrorMessage("No cargo project found");
@@ -80,6 +92,9 @@ export function activate(context: ExtensionContext) {
     dia = languages.createDiagnosticCollection('rust');
     context.subscriptions.push(dia);
 
+    // Add autocomplete
+
+
     // Check if the project should be Linted
     // This might be 'false' if the extension is activated through running one of its
     // registered commands, eg. 'rust.run'
@@ -94,19 +109,22 @@ export function activate(context: ExtensionContext) {
     // ===== Register commands =====
 
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.run', () => {
-        window.showInformationMessage('unimplemented!();');
+        let srcpath = child_process.execSync("echo $RUST_SRC_PATH");
+        window.showInformationMessage("RUST_SRC_PATH: "+srcpath);
+        //window.showInformationMessage('unimplemented!();');
     }));
 
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.runLinter', (editor, edit) => {
+        console.log("CMD: cogs.runLinter");
         runLinter(editor.document.fileName);
     }));
 
     // ===== Add listeners =====
 
     context.subscriptions.push(workspace.onDidSaveTextDocument(document => {
-        window.showInformationMessage("Language ID: '"+document.languageId+"' lint on save: "+settings.runLinterOnSave);
+        //window.showInformationMessage("Language ID: '"+document.languageId+"' lint on save: "+settings.runLinterOnSave);
         if (((document.languageId === "rust") || isCargoFile(document)) && settings.runLinterOnSave) {
-            window.showInformationMessage("Saved rust document!");
+            //window.showInformationMessage("Saved rust document!");
             runLinter(document.fileName);
         }
     }));
@@ -128,6 +146,12 @@ export function activate(context: ExtensionContext) {
             if (!hasRunLinterOnce) {
                 runLinter(editor.document.fileName);
                 hasRunLinterOnce = true;
+            } else if ( // This is an unlinted example document
+                isExample(editor.document.fileName) && 
+                (dia.get(editor.document.uri) === undefined)
+            ) {
+                console.log("Linting unlinted example document");
+                runLinter(editor.document.fileName);
             }
         } else {
             if (workspaceIsCargoProject()) {
@@ -145,6 +169,13 @@ export function activate(context: ExtensionContext) {
     context.subscriptions.push(workspace.onDidChangeConfiguration(e => {
         settings.update();
     }))
+
+    /*context.subscriptions.push(workspace.onDidChangeTextDocument(event => {
+        console.log("DocumentChangeEvent:");
+        event.contentChanges.forEach(change => {
+            console.log("- "+change.text);
+        });
+    }));*/
 
     // When: A document in a workspace is opened (eg. open rsdl2, then open surface.rs)
     // Notes: It seems to have the wrong languageId, saying that Rust files are instead 

@@ -14,7 +14,7 @@
         "onLanguage:rust",
         "workspaceContains:Cargo.toml"
     ],
-    "main": "./out/src/extension",
+    "main": "./out/src/main",
     "contributes": {
         "languages": [
             {

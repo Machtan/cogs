@@ -4,20 +4,57 @@ import * as path from 'path';
 import * as fs from 'fs';
 import {Range, Position, Diagnostic, DiagnosticCollection, DiagnosticSeverity, Uri} from 'vscode';
 
+// Note: This function doesn't clear the diagnostics, but just adds the ones for the
+// Current file. 
+export function runLinterForExample(example: string, projectDir: string, dia: DiagnosticCollection) {
+    let stdoutput: string;
+    try {
+        //console.log("Running linter in dir: '"+projectDir+"'");
+        let cmd = `cargo rustc --example ${example} --message-format json -- -Zno-trans`;
+        console.log(`Linter: RUN: '${cmd}'`);
+        stdoutput = child_process.execSync(cmd, {cwd: projectDir}).toString("utf-8");
+    } catch (e) {
+        //vscode.window.showInformationMessage("Linter failed: " + e);
+        stdoutput = e.stdout.toString("utf-8");
+    }
+    console.log("Stdout:\n"+stdoutput);
+    let map = parseDiagnosticsFromJsonLines(stdoutput, projectDir);
+    
+    // Don't clear the diagnostics, just add the diagnostic for the example.
+    map.forEach((diagnostics, filepath) => {
+        //console.log("Setting the diagnostics for file: '"+filepath+"'");
+        dia.set(Uri.file(filepath), diagnostics);
+    });
+}
+
 export function runLinterForProject(projectDir: string, dia: DiagnosticCollection) {
     // execSync raises an error on statusCode != 0, and naturally rustc errors.
     let stdoutput: string;
     try {
         //console.log("Running linter in dir: '"+projectDir+"'");
         let cmd = "cargo check --message-format json";
+        console.log(`Linter: RUN: '${cmd}'`);
         stdoutput = child_process.execSync(cmd, {cwd: projectDir}).toString("utf-8");
     } catch (e) {
         //vscode.window.showInformationMessage("Linter failed: " + e);
         stdoutput = e.stdout.toString("utf-8");
     }
 
-    let map: Map<string, vscode.Diagnostic[]> = new Map();
-    stdoutput.split("\n").forEach(line => {
+    let map = parseDiagnosticsFromJsonLines(stdoutput, projectDir);
+    
+    dia.clear();
+    map.forEach((diagnostics, filepath) => {
+        //console.log("Setting the diagnostics for file: '"+filepath+"'");
+        dia.set(Uri.file(filepath), diagnostics);
+    });
+}
+
+function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<string, Diagnostic[]> {
+    let map: Map<string, Diagnostic[]> = new Map();
+    let lineno = 1;
+    lines.split("\n").forEach(line => {
+        console.log("Parsing line "+lineno);
+        lineno += 1;
         if (line === "") {
             return;
         }
@@ -36,6 +73,7 @@ export function runLinterForProject(projectDir: string, dia: DiagnosticCollectio
             return;
         }
 
+        let error_message = message;
         let primary = tm.spans.find(span => span.is_primary);
         let range: vscode.Range;
         if (primary === undefined) {
@@ -46,6 +84,20 @@ export function runLinterForProject(projectDir: string, dia: DiagnosticCollectio
                 primary.line_start-1, primary.column_start-1, 
                 primary.line_end-1, primary.column_end-1
             );
+            //console.log("Finding a fitting error message");
+            // Set the message for this diagnostic
+            switch (message) {
+                case "mismatched types": {
+                    //console.log("message.children: "+tm.children+" len: "+tm.children.len);
+                    error_message = tm.children[0].message + "\n" + tm.children[1].message;
+                    break;
+                }
+                default: {
+                    if (primary.label) {
+                        error_message = primary.label;
+                    }
+                }
+            }
         }
         let severity: DiagnosticSeverity;
         if (level === "error") {
@@ -57,8 +109,8 @@ export function runLinterForProject(projectDir: string, dia: DiagnosticCollectio
             severity = undefined;
         }
 
-        let diagnostic = new Diagnostic(range, message, severity);
-        diagnostic.source = "check";
+        let diagnostic = new Diagnostic(range, error_message, severity);
+        // diagnostic.source = "check"; // The source takes up a lot of space :/
 
         //console.log("Adding diagnostic for: " + primary.file_name);
         let filename = path.join(projectDir, primary.file_name);
@@ -80,11 +132,7 @@ export function runLinterForProject(projectDir: string, dia: DiagnosticCollectio
             diagnostics.push(diagnostic);
         }
     });
-    dia.clear();
-    map.forEach((diagnostics, filepath) => {
-        //console.log("Setting the diagnostics for file: '"+filepath+"'");
-        dia.set(Uri.file(filepath), diagnostics);
-    });
+    return map;
 }
 
 /*function onChange() {
