@@ -84,26 +84,28 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
                 primary.line_start-1, primary.column_start-1, 
                 primary.line_end-1, primary.column_end-1
             );
-            //console.log("Finding a fitting error message");
-            // Set the message for this diagnostic
-            if (message == "mistmatched types") {
-                // Use the more complete description if possible
-                    if (tm.children.length == 2) {
-                        error_message = tm.children[0].message + "\n" + tm.children[1].message;
-                    } else {
-                        error_message = primary.label;
-                    }
-            } else if (primary.label == "cannot borrow mutably") {
-                error_message = message;
-            } else {
-                // It seems that this is correct more often than 'primary.label'
-                error_message = message;
-            }
-
-            if (tm.code) {
-                //error_message += "\n\nExplanation:" + tm.code.explanation;
-            }
         }
+
+        //console.log("Finding a fitting error message");
+        // Set the message for this diagnostic
+        if (message == "mismatched types") {
+            // Use the more complete description if possible
+                if (tm.children.length == 2) {
+                    error_message = tm.children[0].message + "\n" + tm.children[1].message;
+                } else {
+                    error_message = primary.label;
+                }
+        } else if (primary.label == "cannot borrow mutably") {
+            error_message = message;
+        } else {
+            // It seems that this is correct more often than 'primary.label'
+            error_message = message;
+        }
+
+        if (tm.code) {
+            //error_message += "\n\nExplanation:" + tm.code.explanation;
+        }
+
         let severity: DiagnosticSeverity;
         if (level === "error") {
             severity = DiagnosticSeverity.Error;
