@@ -98,11 +98,11 @@ export function activate(context: ExtensionContext) {
     // Check if the project should be Linted
     // This might be 'false' if the extension is activated through running one of its
     // registered commands, eg. 'rust.run'
-    if (workspaceIsCargoProject()) {
-        runLinter(path.join(workspace.rootPath, "Cargo.toml"));
-        hasRunLinterOnce = true;
-    } else if ((window.activeTextEditor && window.activeTextEditor.document.languageId === "rust")) {
+    if ((window.activeTextEditor && window.activeTextEditor.document.languageId === "rust")) {
         runLinter(window.activeTextEditor.document.fileName);
+        hasRunLinterOnce = true;
+    } else if (workspaceIsCargoProject()) {
+        runLinter(path.join(workspace.rootPath, "Cargo.toml"));
         hasRunLinterOnce = true;
     }
 

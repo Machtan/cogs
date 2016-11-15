@@ -17,7 +17,7 @@ export function runLinterForExample(example: string, projectDir: string, dia: Di
         //vscode.window.showInformationMessage("Linter failed: " + e);
         stdoutput = e.stdout.toString("utf-8");
     }
-    console.log("Stdout:\n"+stdoutput);
+    //console.log("Stdout:\n"+stdoutput);
     let map = parseDiagnosticsFromJsonLines(stdoutput, projectDir);
     
     // Don't clear the diagnostics, just add the diagnostic for the example.
