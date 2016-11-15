@@ -89,7 +89,13 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
             switch (message) {
                 case "mismatched types": {
                     //console.log("message.children: "+tm.children+" len: "+tm.children.len);
-                    error_message = tm.children[0].message + "\n" + tm.children[1].message;
+                    // Use the more complete description if possible
+                    if (tm.children.length == 2) {
+                        error_message = tm.children[0].message + "\n" + tm.children[1].message;
+                    } else {
+                        error_message = primary.label;
+                    }
+                    
                     break;
                 }
                 default: {
@@ -97,6 +103,9 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
                         error_message = primary.label;
                     }
                 }
+            }
+            if (tm.code) {
+                //error_message += "\n\nExplanation:" + tm.code.explanation;
             }
         }
         let severity: DiagnosticSeverity;
@@ -111,6 +120,9 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
 
         let diagnostic = new Diagnostic(range, error_message, severity);
         // diagnostic.source = "check"; // The source takes up a lot of space :/
+        if (tm.code) {
+            diagnostic.code = tm.code.code;
+        }
 
         //console.log("Adding diagnostic for: " + primary.file_name);
         let filename = path.join(projectDir, primary.file_name);
