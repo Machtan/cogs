@@ -86,24 +86,19 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
             );
             //console.log("Finding a fitting error message");
             // Set the message for this diagnostic
-            switch (message) {
-                case "mismatched types": {
-                    //console.log("message.children: "+tm.children+" len: "+tm.children.len);
-                    // Use the more complete description if possible
+            if (message == "mistmatched types") {
+                // Use the more complete description if possible
                     if (tm.children.length == 2) {
                         error_message = tm.children[0].message + "\n" + tm.children[1].message;
                     } else {
                         error_message = primary.label;
                     }
-                    
-                    break;
-                }
-                default: {
-                    if (primary.label) {
-                        error_message = primary.label;
-                    }
-                }
+            } else if (primary.label == "cannot borrow mutably") {
+                error_message = message;
+            } else {
+                error_message = primary.label;
             }
+
             if (tm.code) {
                 //error_message += "\n\nExplanation:" + tm.code.explanation;
             }
