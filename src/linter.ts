@@ -96,7 +96,8 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
             } else if (primary.label == "cannot borrow mutably") {
                 error_message = message;
             } else {
-                error_message = primary.label;
+                // It seems that this is correct more often than 'primary.label'
+                error_message = message;
             }
 
             if (tm.code) {
@@ -118,6 +119,8 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         if (tm.code) {
             diagnostic.code = tm.code.code;
         }
+
+        console.log(`Linter: ${level}: ${error_message}`);
 
         //console.log("Adding diagnostic for: " + primary.file_name);
         let filename = path.join(projectDir, primary.file_name);
