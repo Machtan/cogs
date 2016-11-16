@@ -4,16 +4,11 @@ A Visual Studio Code extension for rust development, akin to RustyCode.
 
 ## Features
 
-- Linting using cargo-check
+- Linting using cargo
 
 ## Requirements
 
-A recent version of 'cargo-check':
-
-> \*```cargo install cargo-check```
-
-
-\* With the cargo install location (eg. '~/.cargo/bin') in your $PATH
+A recent version of rustc/cargo (supporting '--message-format json'
 
 ## Extension Settings
 

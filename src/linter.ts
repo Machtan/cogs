@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import {getProjectTargets, findCrateRoot, Target, TargetKind} from './common';
 import {Range, Position, Diagnostic, DiagnosticCollection, DiagnosticSeverity, Uri} from 'vscode';
 
 // Note: This function doesn't clear the diagnostics, but just adds the ones for the
@@ -27,20 +28,44 @@ export function runLinterForExample(example: string, projectDir: string, dia: Di
     });
 }
 
+// Creates a cargo command to run to lint the given target.
+export function getTargetLintCommand(target: Target): string {
+    let cmd = "cargo rustc --message-format json";
+    if (target.kind == TargetKind.Library) {
+        cmd += " --lib";
+    } else if (target.kind === TargetKind.Binary) {
+        cmd += " --bin " + target.name;
+    } else if (target.kind === TargetKind.Example) {
+        cmd += " --example " + target.name;
+    }
+    cmd += " -- -Zno-trans";
+    return cmd;
+}
+
+// Runs what amounts to 'cargo check' on the project of the given file.
+export function cargoCheck(projectDir: string): string {
+    let output = ""
+    getProjectTargets(projectDir).forEach(target => {
+        // Don't lint examples on cargo check (yet)
+        if (target.kind == TargetKind.Example) {
+            return;
+        }
+        let cmd = getTargetLintCommand(target);
+        console.log(`Check: RUN >> ${cmd}`)
+        try {
+            output += child_process.execSync(cmd, {cwd: projectDir}).toString("utf-8");
+        } catch (e) {
+            output += e.stdout.toString("utf-8");
+        }
+    });
+    return output;
+}
+
 export function runLinterForProject(projectDir: string, dia: DiagnosticCollection) {
     // execSync raises an error on statusCode != 0, and naturally rustc errors.
-    let stdoutput: string;
-    try {
-        //console.log("Running linter in dir: '"+projectDir+"'");
-        let cmd = "cargo check --message-format json";
-        console.log(`Linter: RUN: '${cmd}'`);
-        stdoutput = child_process.execSync(cmd, {cwd: projectDir}).toString("utf-8");
-    } catch (e) {
-        //vscode.window.showInformationMessage("Linter failed: " + e);
-        stdoutput = e.stdout.toString("utf-8");
-    }
+    let output = cargoCheck(projectDir);
 
-    let map = parseDiagnosticsFromJsonLines(stdoutput, projectDir);
+    let map = parseDiagnosticsFromJsonLines(output, projectDir);
     
     dia.clear();
     map.forEach((diagnostics, filepath) => {
@@ -62,7 +87,7 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         try {
             tree = JSON.parse(line);
         } catch (e) {
-            console.log("Could not parse JSON in line: "+line);
+            console.log("ERR: Could not parse JSON in line: "+line);
             return;
         }
         // Note: Use package_id to ensure this is in the current project?
@@ -112,7 +137,7 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         } else if (level === "warning") {
             severity = DiagnosticSeverity.Warning;
         } else {
-            console.log("Unhandled rust error level: "+level);
+            console.log("ERR: Unhandled rust error level: "+level);
             severity = undefined;
         }
 
