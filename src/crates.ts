@@ -45,6 +45,12 @@ export class CrateManager {
         this.crates.set(root, crate);
     }
 
+    // Returns whether the given target is the main lint target for its crate.
+    isMainLintTarget(target: Target): boolean {
+        let crateTarget = findTarget(target.crateRoot, false);
+        return crateTarget.eq(target);
+    }
+
     // Updates the lints for the given target
     updateTarget(target: Target, lints: Map<string, Diagnostic[]>) {
         if (!this.crates.has(target.crateRoot)) {

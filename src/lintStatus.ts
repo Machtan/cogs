@@ -2,12 +2,21 @@ import * as path from 'path';
 import {findCrateRoot} from './common';
 import {window, workspace, commands, DiagnosticCollection, DiagnosticSeverity, StatusBarItem, ExtensionContext, StatusBarAlignment, Uri, Selection} from 'vscode';
 
-export class LintStatusHelper {
+class CrateLints {
+    constructor(public root: string, public errors: number, public warnings: number) {}
+}
+
+export class LintStatusBar {
     bar: StatusBarItem;
     dia: DiagnosticCollection;
+    crate: CrateLints;
+    errors: number;
+    warnings: number;
 
     // Initializes the bar and its crap.
     constructor(context: ExtensionContext, dia: DiagnosticCollection) {
+        this.errors = 0;
+        this.warnings = 0;
         this.dia = dia;
         context.subscriptions.push(commands.registerCommand('fancyLint.showFiles', () => {
             this.showErrorFiles();
@@ -15,42 +24,74 @@ export class LintStatusHelper {
         this.bar = window.createStatusBarItem(StatusBarAlignment.Left, 2);
         this.bar.command = "fancyLint.showFiles";
         this.bar.tooltip = "Show dirty files";
+        this.crate = new CrateLints("", 0, 0);
         context.subscriptions.push(this.bar);
         if (window.activeTextEditor) {
             this.updateStatus(window.activeTextEditor.document.fileName);
         } else {
-            this.setFancyLintText(0, 0);
+            this.updateText();
         }
         this.bar.show();
-
-        context.subscriptions.push(window.onDidChangeActiveTextEditor(editor => {
-            if (editor === undefined) {
-                return;
-            }
-            //console.log("LSH: Changed editor to '"+editor.document.fileName+"'");
-            this.updateStatus(editor.document.fileName);
-        }))
     }
 
-    setFancyLintText(errors: number, warnings: number) {
-        this.bar.text = `-> $(circle-slash) ${errors} $(alert) ${warnings}`;
+    updateCrateLintsIfNew(filePath: string) {
+        let crateRoot = findCrateRoot(filePath);
+        if (crateRoot !== this.crate.root) {
+            this.updateCrateLints(filePath);
+        }
+        this.updateText();
+    }
+
+    updateCrateLints(filePath: string) {
+        let crateRoot = findCrateRoot(filePath);
+        console.log("CRATE => "+path.basename(crateRoot));
+        let errors = 0;
+        let warnings = 0;
+        this.dia.forEach((uri, diagnostics) => {
+            console.log(`'${uri.fsPath}' startsWith '${crateRoot}' -> ${uri.fsPath.startsWith(crateRoot)}`);
+            if (uri.fsPath.startsWith(crateRoot)) {
+                diagnostics.forEach(diagnostic => {
+                    if (diagnostic.severity === DiagnosticSeverity.Error) {
+                        errors += 1;
+                    } else if (diagnostic.severity === DiagnosticSeverity.Warning) {
+                        warnings += 1;
+                    }
+                });
+            }
+        });
+        this.crate = new CrateLints(crateRoot, errors, warnings);
+        this.updateStatus(filePath);
+    }
+
+    updateText() {
+        // Hack to somehow fix the fact that the crate count is wrong immediately after
+        // linting a member file :/
+        /*if (this.errors > this.crate.errors) {
+            this.crate.errors = this.errors;
+        }
+        if (this.warnings >this.crate.warnings) {
+            this.crate.warnings = this.warnings;
+        }*/
+        this.bar.text = `$(circle-slash) ${this.errors}/${this.crate.errors} $(alert) ${this.warnings}/${this.crate.warnings}`;
+        console.log(`STATUS: Updating text => '${this.bar.text}'`);
     }
 
     updateStatus(filePath: string) {
+        this.updateCrateLintsIfNew(filePath);
         let diagnostics = this.dia.get(Uri.file(filePath));
+        this.errors = 0;
+        this.warnings = 0;
         if (diagnostics !== undefined) {
-            let errors = 0;
-            let warnings = 0;
             diagnostics.forEach(diagnostic => {
                 if (diagnostic.severity = DiagnosticSeverity.Error) {
-                    errors += 1;
+                    this.errors += 1;
                 } else if (diagnostic.severity = DiagnosticSeverity.Warning) {
-                    warnings += 1;
+                    this.warnings += 1;
                 }
             });
-            this.setFancyLintText(errors, warnings);
+            this.updateText();
         } else {
-            this.setFancyLintText(0, 0);
+            this.updateText();
         }
     }
 

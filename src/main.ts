@@ -12,12 +12,12 @@ import * as fs from 'fs';
 import {findCrateRoot, findTarget, TargetKind} from './common';
 import {runOrBuild} from './run';
 import {CrateManager} from './crates';
-import {LintStatusHelper} from './fancyLint';
+import {LintStatusBar} from './lintStatus';
 
 let bar: StatusBarItem;
 let settings: Settings;
 let manager: CrateManager;
-let lintStatus: LintStatusHelper;
+let lintStatus: LintStatusBar;
 
 const RUST_MODE: DocumentFilter = {language: 'rust', scheme: 'file'};
 
@@ -27,7 +27,7 @@ export function runLinter(filePath: string) {
         let target = findTarget(filePath, false);
         runLinterForTarget(target, manager);
         updateLastLintTime();
-        lintStatus.updateStatus(filePath);
+        lintStatus.updateCrateLints(filePath);
     } else {
         window.showErrorMessage(`No cargo project found for file '${filePath}'`);
     }
@@ -42,7 +42,7 @@ export function runLinterIfUnlinted(filePath: string) {
             console.log(`Unlinted('${path.basename(filePath)}') => true`);
             runLinterForTarget(target, manager); // TODO: reuse target
             updateLastLintTime();
-            lintStatus.updateStatus(filePath);
+            lintStatus.updateCrateLints(filePath);
         }
     } else {
         window.showErrorMessage(`No cargo project found for file '${filePath}'`);
@@ -95,7 +95,7 @@ export function activate(context: ExtensionContext) {
     context.subscriptions.push(dia);
 
     // Try the not-so-fancy linter extension (yay)
-    lintStatus = new LintStatusHelper(context, dia)
+    lintStatus = new LintStatusBar(context, dia)
 
     // Add autocomplete
 
@@ -169,6 +169,7 @@ export function activate(context: ExtensionContext) {
         let crateRoot = findCrateRoot(editor.document.fileName);
         if (!crateRoot) {
             hideBar("CAT: Crate root not found");
+            lintStatus.updateStatus(editor.document.fileName);
             return;
         }
         showBar("CAT: Crate root found");
@@ -181,6 +182,7 @@ export function activate(context: ExtensionContext) {
             console.log("CAT: Linting if unlinted: "+path.basename(editor.document.fileName));
             runLinterIfUnlinted(editor.document.fileName);
         }
+        lintStatus.updateStatus(editor.document.fileName);
     }));
 
     context.subscriptions.push(workspace.onDidChangeConfiguration(e => {
