@@ -83,7 +83,7 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
     let map: Map<string, Diagnostic[]> = new Map();
     let lineno = 1;
     lines.split("\n").forEach(line => {
-        console.log("Parsing line "+lineno);
+        console.log("Linter: Parsing line "+lineno);
         lineno += 1;
         if (line === "") {
             return;
@@ -92,7 +92,7 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         try {
             tree = JSON.parse(line);
         } catch (e) {
-            console.log("ERR: Could not parse JSON in line: "+line);
+            console.log("Linter: ERR: Could not parse JSON in line: "+line);
             return;
         }
         // Note: Use package_id to ensure this is in the current project?
@@ -142,7 +142,7 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         } else if (level === "warning") {
             severity = DiagnosticSeverity.Warning;
         } else {
-            console.log("ERR: Unhandled rust error level: "+level);
+            console.log("Linter: ERR: Unhandled rust error level: "+level);
             severity = undefined;
         }
 

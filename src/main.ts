@@ -36,8 +36,10 @@ export function runLinter(filePath: string) {
 export function runLinterIfUnlinted(filePath: string) {
     if (findCrateRoot(filePath)) {
         let target = findTarget(filePath, false);
+        //console.log(`'${filePath}'.target => (target: ${target})`);
         if ((target.kind !== TargetKind.Library) && 
         (!manager.hasLintsForTarget(target))) {
+            console.log(`Unlinted('${path.basename(filePath)}') => true`);
             runLinterForTarget(target, manager); // TODO: reuse target
             updateLastLintTime();
             lintStatus.updateStatus(filePath);
@@ -171,10 +173,12 @@ export function activate(context: ExtensionContext) {
         }
         showBar("CAT: Crate root found");
         if (!manager.hasCrateBeenLinted(crateRoot)) {
+            console.log("CAT: Linting crate for first time: "+path.basename(crateRoot));
             runLinter(editor.document.fileName);
         }
         if (editor.document.languageId === "rust") {
             // NOTE: This might not be necessary?
+            console.log("CAT: Linting if unlinted: "+path.basename(editor.document.fileName));
             runLinterIfUnlinted(editor.document.fileName);
         }
     }));

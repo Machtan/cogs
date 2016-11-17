@@ -54,7 +54,8 @@ export class CrateManager {
         crate.lintCache.updateTarget(target, lints);
         if (!crate.hasBeenLintedOnce) {
             let crateTarget = findTarget(crate.root, false);
-            if (target === crateTarget) {
+            //console.log(`updateTarget: Checking if ${crateTarget} is ${target} -> ${target.eq(crateTarget)}`);
+            if (target.eq(crateTarget)) {
                 crate.hasBeenLintedOnce = true;
             }
         }

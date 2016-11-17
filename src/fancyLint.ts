@@ -1,5 +1,6 @@
 import * as path from 'path';
-import {window, workspace, commands, DiagnosticCollection, DiagnosticSeverity, StatusBarItem, ExtensionContext, StatusBarAlignment, Uri} from 'vscode';
+import {findCrateRoot} from './common';
+import {window, workspace, commands, DiagnosticCollection, DiagnosticSeverity, StatusBarItem, ExtensionContext, StatusBarAlignment, Uri, Selection} from 'vscode';
 
 export class LintStatusHelper {
     bar: StatusBarItem;
@@ -83,17 +84,19 @@ export class LintStatusHelper {
                     }
                 }
             }
-            let detail = "";
+            let description = "";
             if (errors !== 0) {
-                detail += "Errors: "+errors+" ";
+                description += "Errors: "+errors+" ";
             }
             if (warnings !== 0) {
-                detail += "Warnings: "+warnings;
+                description += "Warnings: "+warnings;
             }
+            let crateRoot = findCrateRoot(uri.fsPath);
+            let relPath = path.relative(crateRoot, uri.fsPath);
             let pick = {
-                label: path.basename(uri.fsPath),
+                label: relPath,
                 //detail: detail,
-                description: detail,
+                description: description,
                 errors: errors,
                 warnings: warnings,
                 filePath: uri.fsPath,
@@ -123,7 +126,7 @@ export class LintStatusHelper {
             workspace.openTextDocument(pick.filePath as string).then(document => {
                 window.showTextDocument(document).then(editor => {
                     editor.revealRange(pick.range);//, TextEditorRevealType.InCenter);
-                    //editor.selection = new Selection(pick.range.start, pick.range.start);
+                    editor.selection = new Selection(pick.range.start, pick.range.start);
                 })
             });
         })

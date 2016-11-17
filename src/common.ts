@@ -51,6 +51,13 @@ export class Target {
         }
     }
 
+    eq(other: Target): boolean {
+        return this.name === other.name && 
+        this.kind === other.kind &&
+        this.src_path === other.src_path &&
+        this.crateRoot === other.crateRoot;
+    }
+
     toString(): string {
         let kindName;
         if (this.kind === TargetKind.Binary) {
@@ -163,7 +170,9 @@ export function findCrateRoot(memberFilePath: string): string {
     }
     // Check to see if this is the crate root. (Or a very badly named source file)
     if (fs.existsSync(path.join(memberFilePath, "Cargo.toml"))) {
-        crateRoots.push(memberFilePath);
+        // NOTE: The path.sep is very important to avoid partial matches like
+        // rsdl2_image/* getting the root of rsdl2.
+        crateRoots.push(memberFilePath + path.sep);
         return memberFilePath;
     }
     // Support build.rs
