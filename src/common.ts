@@ -124,16 +124,25 @@ export function findTargetForFile(filePath: string, targets: Target[], isRunTarg
     }
 }
 
+// Cache for crate roots
+let crateRoots = [];
 // Finds the crate root for the given file if any
 export function findCrateRoot(memberFilePath: string): string {
+    for (let root of crateRoots) {
+        if (memberFilePath.startsWith(root)) {
+            return root;
+        }
+    }
     // Check to see if this is the crate root. (Or a very badly named source file)
     if (fs.existsSync(path.join(memberFilePath, "Cargo.toml"))) {
+        crateRoots.push(memberFilePath);
         return memberFilePath;
     }
     // Support build.rs
     let dir = path.dirname(memberFilePath);
     while (dir != "") {
         if (fs.existsSync(path.join(dir, "Cargo.toml"))) {
+            crateRoots.push(dir);
             return dir;
         }
         dir = path.dirname(dir);

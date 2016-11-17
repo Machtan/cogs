@@ -145,6 +145,10 @@ export function activate(context: ExtensionContext) {
             return;
         }
         let crateRoot = findWorkspaceCrateRoot();
+        if (crateRoot === "") {
+            hideBar("CAT: Language Id and workspace is not rust, but " + editor.document.languageId);
+            return;
+        }
         if (editor.document.languageId === "rust") {
             showBar("CAT: Language Id is Rust");
             //window.showInformationMessage("Switched to rust document: '" + editor.document.fileName + "'");
@@ -154,14 +158,10 @@ export function activate(context: ExtensionContext) {
                 runLinterIfUnlinted(editor.document.fileName);
             }
         } else {
-            if (crateRoot) {
-                if (!lintCache.hasLintsForWorkspace(crateRoot)) {
-                    runLinter(editor.document.fileName);
-                }
-                showBar("CAT: Workspace is Rust");
-            } else {
-                hideBar("CAT: Language Id and workspace is not rust, but " + editor.document.languageId);
+            if (!lintCache.hasLintsForWorkspace(crateRoot)) {
+                runLinter(editor.document.fileName);
             }
+            showBar("CAT: Workspace is Rust");
         }
     }));
 
