@@ -2,43 +2,44 @@ import * as vscode from "vscode";
 import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import {getProjectTargets, findCrateRoot, findTargetForFile, Target, TargetKind} from './common';
+import {findProjectTargets, findCrateRoot, findTargetForFile, Target, TargetKind} from './common';
 import {Range, Position, Diagnostic, DiagnosticCollection, DiagnosticSeverity, Uri} from 'vscode';
+import {CrateManager} from './crates';
 
-interface WSLintCache {
+
+export class LintCache {
+    dia: DiagnosticCollection;
     // Files whose lints were updated last time a 'lib' target was built
     lastLibTargetFiles: string[];
     // If the project doesn't have a lib target it can't really use examples/tests
     // so this structure should be okay.
 
+    // Whether the cache has been run for a library
+    hasLibraryLints: boolean;
+
     // Targets that have already been linted and thus needn't be relinted on open
     otherLintedTargets: Set<string>;
-}
-
-export class LintCache {
-    workspaces: Map<string, WSLintCache>;
-    dia: DiagnosticCollection;
 
     constructor(dia: DiagnosticCollection) {
-        this.workspaces = new Map();
         this.dia = dia;
+        this.lastLibTargetFiles = [];
+        this.otherLintedTargets = new Set();
     }
 
     updateTarget(target: Target, lints: Map<string, Diagnostic[]>) {
-        let cache = this.getOrInsertWorkspace(target.crateRoot);
         switch (target.kind) {
             case TargetKind.Library: {
-                for (let filePath of cache.lastLibTargetFiles) {
+                for (let filePath of this.lastLibTargetFiles) {
                     this.dia.delete(Uri.file(filePath));
                 }
                 // Clear the array in a roundabout way
-                cache.lastLibTargetFiles.length = 0;
+                this.lastLibTargetFiles.length = 0;
                 break;
             }
             case TargetKind.Binary:
             case TargetKind.Example:
             case TargetKind.Test: {
-                cache.otherLintedTargets.add(target.src_path);
+                this.otherLintedTargets.add(target.src_path);
                 break;
             }
             default: {
@@ -48,44 +49,21 @@ export class LintCache {
         lints.forEach((diagnostics, filePath) => {
             this.dia.set(Uri.file(filePath), diagnostics);
             if (target.kind === TargetKind.Library) {
-                cache.lastLibTargetFiles.push(filePath);
+                this.lastLibTargetFiles.push(filePath);
             }
         });
     }
 
-    hasLintsForTarget(target: Target): boolean {
-        if (!this.workspaces.has(target.crateRoot)) {
-            return false;
-        }
-        let cache = this.workspaces.get(target.crateRoot);
-        return cache.otherLintedTargets.has(target.src_path);
+    hasFile(filePath: string): boolean {
+        return this.otherLintedTargets.has(filePath);
     }
 
-    hasLintsForFile(filePath: string): boolean {
-        let crateRoot = findCrateRoot(filePath);
-        if (!this.workspaces.has(crateRoot)) {
-            return false;
-        }
-        let cache = this.workspaces.get(crateRoot);
-        return cache.otherLintedTargets.has(filePath);
-    }
-
-    getOrInsertWorkspace(crateRoot): WSLintCache {
-        if (!this.workspaces.has(crateRoot)) {
-            let cache = {lastLibTargetFiles: [], otherLintedTargets: new Set()};
-            this.workspaces.set(crateRoot, cache);
-            return cache;
-        } else {
-            return this.workspaces.get(crateRoot);
-        }
-    }
-
-    hasLintsForWorkspace(crateRoot): boolean {
-        return this.workspaces.has(crateRoot);
+    hasTarget(target: Target): boolean {
+        return this.otherLintedTargets.has(target.src_path);
     }
 }
 
-export function runLinterForTarget(target: Target, cache: LintCache) {
+export function runLinterForTarget(target: Target, manager: CrateManager) {
     // execSync raises an error on statusCode != 0, and naturally rustc errors.
     let cmd = target.lint_command();
     console.log(`Linter: RUN >> ${cmd}`);
@@ -98,7 +76,7 @@ export function runLinterForTarget(target: Target, cache: LintCache) {
 
     let lints = parseDiagnosticsFromJsonLines(output, target.crateRoot);
     
-    cache.updateTarget(target, lints);
+    manager.updateTarget(target, lints);
 }
 
 function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<string, Diagnostic[]> {
@@ -183,8 +161,19 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         if (!fs.existsSync(filename)) {
             // Handle fatal errors
             if (severity == DiagnosticSeverity.Error) {
-                console.log("ERR: Out-of-project lint error:\n"+line);
-                vscode.window.showErrorMessage("Out-of-project error: "+error_message);
+                // console.log("ERR: Out-of-project lint error:\n"+line);
+                //vscode.window.showErrorMessage("Out-of-project error: "+error_message);
+                filename = path.join(projectDir, "Cargo.toml");
+                let crate = tree.target.name;
+                let message = `External error: '${crate}':\n`;
+                let file = path.basename(tree.target.src_path);
+                let prefix = `${file}:${primary.line_start}:${primary.column_start}: `;
+                message += prefix+"\n";
+                for (let line of primary.text[0].text.split("\n")) {
+                    message += "   " + line + "\n";
+                }
+                message += "error: " + error_message;
+                diagnostic = new Diagnostic(new Range(0, 0, 0, 0), message, severity);
             } else {
                 // Ignore out-of-project warnings.
                 return;

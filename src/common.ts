@@ -2,10 +2,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
 
-export class CrateRootNotFoundError {
-    constructor(public filePath: string) {};
-}
-
 export enum TargetKind {
     Binary,
     Library,
@@ -71,15 +67,15 @@ export class Target {
 }
 
 // Gets the target for running or building this file
-export function getFileTarget(filePath: string, isRunTarget: boolean): Target {
+export function findTarget(filePath: string, isRunTarget: boolean): Target {
     let crateRoot = findCrateRoot(filePath);
-    let targets = getProjectTargets(crateRoot);
+    let targets = findProjectTargets(crateRoot);
     return findTargetForFile(filePath, targets, isRunTarget);
 }
 
 // Finds the targets of the project the given file is part of, using 'cargo metadata'
 // TODO: Cache this and watch cargo.toml?
-export function getProjectTargets(crateRoot: string): Target[] {
+export function findProjectTargets(crateRoot: string): Target[] {
     let output;
     let cmd = "cargo metadata --no-deps";
     console.log("RUN >> "+cmd);
@@ -154,8 +150,12 @@ export function findTargetForFile(filePath: string, targets: Target[], isRunTarg
 
 // Cache for crate roots
 let crateRoots = [];
+let filesWithNoCrate = new Set();
 // Finds the crate root for the given file if any
 export function findCrateRoot(memberFilePath: string): string {
+    if (filesWithNoCrate.has(memberFilePath)) {
+        return "";
+    }
     for (let root of crateRoots) {
         if (memberFilePath.startsWith(root)) {
             return root;
@@ -175,5 +175,6 @@ export function findCrateRoot(memberFilePath: string): string {
         }
         dir = path.dirname(dir);
     }
-    throw new CrateRootNotFoundError(memberFilePath);
+    filesWithNoCrate.add(memberFilePath);
+    return "";
 }

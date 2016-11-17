@@ -12,7 +12,11 @@
     ],
     "activationEvents": [
         "onLanguage:rust",
-        "workspaceContains:Cargo.toml"
+        "workspaceContains:Cargo.toml",
+        "onCommand:cogs.run",
+        "onCommand:cogs.runLinter",
+        "onCommand:cogs.clearLintsForCrate",
+        "onCommand:cogs.testCogs"
     ],
     "main": "./out/src/main",
     "contributes": {
@@ -34,22 +38,29 @@
                 "title": "Rust: Run/build the current file/project"
             },
             {
-                "command": "cogs.test",
+                "command": "cogs.testCogs",
                 "title": "Rust: TEST COGS"
+            },
+            {
+                "command": "cogs.clearLintsForCrate",
+                "title": "Rust: Clear lints for the current crate"
             }
         ],
         "keybindings": [
             {
                 "key": "ctrl+shift+l",
                 "mac": "cmd+shift+l",
-                "command": "cogs.runLinter",
-                "when": "editorLangId == 'rust'"
+                "command": "cogs.runLinter"
             },
             {
                 "key": "ctrl+shift+r",
                 "mac": "cmd+shift+r",
-                "command": "cogs.run",
-                "when": "editorLangId == 'rust'"
+                "command": "cogs.run"
+            },
+            {
+                "key": "ctrl+shift+c",
+                "mac": "cmd+shift+c",
+                "command": "cogs.clearLintsForCrate"
             }
         ],
         "configuration": {
