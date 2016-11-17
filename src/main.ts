@@ -1,7 +1,7 @@
 'use strict';
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticCollection, TextEditor, TextEditorEdit, DocumentFilter} from 'vscode';
+import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticCollection, TextEditor, TextEditorEdit, DocumentFilter, Terminal} from 'vscode';
 //import * as cap from './capabilities';
 import {runLinterForTarget, LintCache} from './linter';
 import {Settings} from './settings';
@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import {findCrateRoot, getFileTarget, CrateRootNotFoundError, TargetKind} from './common';
 import {runOrBuild} from './run';
 
+let terminals: Map<string, Terminal>;
 let lintCache: LintCache;
 let bar: StatusBarItem = window.createStatusBarItem(StatusBarAlignment.Left);
 let settings = new Settings();
@@ -82,6 +83,8 @@ export function activate(context: ExtensionContext) {
     bar.text = defaultBarText;
     showBar("Activate!");
 
+    terminals = new Map();
+
     // Create a new diagnostics collection (lints for each file)
     let dia = languages.createDiagnosticCollection('rust');
     lintCache = new LintCache(dia);
@@ -114,7 +117,18 @@ export function activate(context: ExtensionContext) {
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.run', 
     (editor, edit) => {
         console.log("CMD: cogs.run");
-        runOrBuild(editor.document.fileName);
+        let crateRoot = findCrateRoot(editor.document.fileName);
+        if (!terminals.has(crateRoot)) {
+            let terminal = window.createTerminal("Rust: "+path.basename(crateRoot));
+            // TODO: support windows
+            let cdCmd = "cd "+crateRoot;
+            terminal.sendText(cdCmd, true);
+            terminal.hide();
+            context.subscriptions.push(terminal);
+            terminals.set(crateRoot, terminal);
+        }
+        let terminal = terminals.get(crateRoot);
+        runOrBuild(editor.document.fileName, terminal);
     }))
 
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.runLinter', 

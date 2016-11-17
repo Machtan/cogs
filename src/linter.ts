@@ -87,7 +87,7 @@ export class LintCache {
 
 export function runLinterForTarget(target: Target, cache: LintCache) {
     // execSync raises an error on statusCode != 0, and naturally rustc errors.
-    let cmd = "cargo rustc --message-format json" + target.cargo_args() + " -- -Zno-trans";
+    let cmd = target.lint_command();
     console.log(`Linter: RUN >> ${cmd}`);
     let output;
     try {
@@ -183,7 +183,8 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         if (!fs.existsSync(filename)) {
             // Handle fatal errors
             if (severity == DiagnosticSeverity.Error) {
-                vscode.window.showErrorMessage("Out-of-project error: "+line);
+                console.log("ERR: Out-of-project lint error:\n"+line);
+                vscode.window.showErrorMessage("Out-of-project error: "+error_message);
             } else {
                 // Ignore out-of-project warnings.
                 return;

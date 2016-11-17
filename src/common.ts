@@ -16,13 +16,35 @@ export enum TargetKind {
 export class Target {
     constructor(public name: string, public kind: TargetKind, public src_path: string, public crateRoot: string) {}
 
-    cargo_args(): string {
+    lint_command(): string {
+        let args = this.cargo_rustc_args();
+        return `cargo rustc --message-format json ${args} -- -Zno-trans`;
+    }
+
+    run_command(): string {
+        switch (this.kind) {
+            case TargetKind.Binary: {
+                return "cargo run --bin "+this.name;
+            }
+            case TargetKind.Library: {
+                return "cargo build --lib";
+            }
+            case TargetKind.Example: {
+                return "cargo run --example "+this.name;
+            }
+            case TargetKind.Test: {
+                return "cargo test --test "+this.name;
+            }
+        }
+    }
+
+    cargo_rustc_args(): string {
         switch (this.kind) {
             case TargetKind.Binary: {
                 return " --bin "+this.name;
             }
             case TargetKind.Library: {
-                return " --lib "+this.name;
+                return " --lib ";
             }
             case TargetKind.Example: {
                 return " --example "+this.name;
@@ -31,6 +53,20 @@ export class Target {
                 return " --test "+this.name;
             }
         }
+    }
+
+    toString(): string {
+        let kindName;
+        if (this.kind === TargetKind.Binary) {
+            kindName = "Binary";
+        } else if (this.kind === TargetKind.Library) {
+            kindName = "Library";
+        } else if (this.kind === TargetKind.Example) {
+            kindName = "Example";
+        } else if (this.kind === TargetKind.Test) {
+            kindName = "Test";
+        }
+        return `Target { name: ${this.name}, kind: ${kindName}, src_path: '${this.src_path}'}`;
     }
 }
 
@@ -80,7 +116,7 @@ export function getProjectTargets(crateRoot: string): Target[] {
 // Finds the fitting cargo target for running the given file
 export function findTargetForFile(filePath: string, targets: Target[], isRunTarget: boolean): Target {
     let binCount = 0;
-    let libCount = 0;
+    let hasLib = false;
     for (let target of targets) {
         // If the filename is one of the targets: use it
         if (target.src_path === filePath) {
@@ -89,7 +125,7 @@ export function findTargetForFile(filePath: string, targets: Target[], isRunTarg
         if (target.kind === TargetKind.Binary) {
             binCount += 1;
         } else if (target.kind === TargetKind.Library) {
-            libCount += 1;
+            hasLib = true;
         }
     }
     // Otherwise prioritise bin/lib targets based on the 'isRunTarget' parameter
@@ -100,20 +136,12 @@ export function findTargetForFile(filePath: string, targets: Target[], isRunTarg
             let target = targets.find(target => target.kind === TargetKind.Binary);
             console.log(`ERR: Multiple [bin] targets for project, using first: '${target.name}'`)
             return target;
-        } else if (libCount === 1) {
+        } else if (hasLib) {
             return targets.find(target => target.kind === TargetKind.Library);
-        } else if (libCount > 1) {
-            let target = targets.find(target => target.kind === TargetKind.Library);
-            console.log(`ERR: Multiple [lib] targets for project, using first: '${target.name}'`)
-            return target;
         }
     } else {
-        if (libCount === 1) {
+        if (hasLib) {
             return targets.find(target => target.kind === TargetKind.Library);
-        } else if (libCount > 1) {
-            let target = targets.find(target => target.kind === TargetKind.Library);
-            console.log(`ERR: Multiple [lib] targets for project, using first: '${target.name}'`)
-            return target;
         } else if (binCount === 1) {
             return targets.find(target => target.kind === TargetKind.Binary);
         } else if (binCount > 1) {
