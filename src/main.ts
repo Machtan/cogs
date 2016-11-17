@@ -3,60 +3,54 @@
 // Import the module and reference it with the alias vscode in your code below
 import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticCollection, TextEditor, TextEditorEdit, DocumentFilter} from 'vscode';
 //import * as cap from './capabilities';
-import {runLinterForProject, runLinterForExample} from './linter';
+import {runLinterForTarget, LintCache} from './linter';
 import {Settings} from './settings';
 import {RustCompleter} from './suggestions';
 import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import {findCrateRoot} from './common';
+import {findCrateRoot, getFileTarget, CrateRootNotFoundError, TargetKind} from './common';
+import {runOrBuild} from './run';
 
-let dia: DiagnosticCollection;
+let lintCache: LintCache;
 let bar: StatusBarItem = window.createStatusBarItem(StatusBarAlignment.Left);
-let hasRunLinterOnce = false;
 let settings = new Settings();
 const RUST_MODE: DocumentFilter = {language: 'rust', scheme: 'file'};
-//let capabilities: cap.Capabilities;
 
-
-export function isExample(filename: string): boolean {
-    let crate = findCrateRoot(filename);
-    let exampleDirPrefix = path.join(crate, "example", "");
-    if (filename.startsWith(exampleDirPrefix)) {
-        if (!filename.endsWith(".rs")) {
-            return false;
-        }
-        return true;
-    } else {
-        return false;
-    }
-}
-
-export function runLinter(filename: string) {
+export function runLinter(filePath: string) {
     //window.showInformationMessage("Filename: "+ editor.document.fileName);
-    let crate = findCrateRoot(filename);
-    if (crate !== null) {
-        //window.showInformationMessage("Crate root: "+crate);
-        if (isExample(filename)) {
-            let example = path.basename(filename, ".rs");
-            console.log(`Linting example '${example}'!`);
-            runLinterForExample(example, crate, dia);
-        } else {
-            console.log(`Linting project at '${crate}'`);
-            runLinterForProject(crate, dia);
-        }
+    try {
+        let target = getFileTarget(filePath, false);
+        runLinterForTarget(target, lintCache);
         updateLastLintTime();
-    } else {
-        window.showErrorMessage("No cargo project found");
+    } catch (CrateRootNotFoundError) {
+        window.showErrorMessage(`No cargo project found for file '${filePath}'`);
     }
 }
 
-export function workspaceIsCargoProject(): boolean {
-    return (fs.existsSync(path.join(workspace.rootPath, "Cargo.toml")));
+export function runLinterIfUnlinted(filePath: string) {
+    try {
+        let target = getFileTarget(filePath, false);
+        if ((target.kind !== TargetKind.Library) && 
+        (!lintCache.hasLintsForTarget(target))) {
+            runLinterForTarget(target, lintCache); // TODO: reuse target
+        }
+    } catch (CrateRootNotFoundError) {
+        window.showErrorMessage(`No cargo project found for file '${filePath}'`);
+    }
+}
+
+export function findWorkspaceCrateRoot(): string {
+    try {
+        let crateRoot = findCrateRoot(workspace.rootPath);
+        return crateRoot;
+    } catch (CrateRootNotFoundError) {
+        return "";
+    }
 }
 
 export function isCargoFile(doc: TextDocument): boolean {
-    return path.basename(doc.fileName) == "Cargo.toml";
+    return path.basename(doc.fileName) === "Cargo.toml";
 }
 
 function hideBar(message: string) {
@@ -89,7 +83,9 @@ export function activate(context: ExtensionContext) {
     showBar("Activate!");
 
     // Create a new diagnostics collection (lints for each file)
-    dia = languages.createDiagnosticCollection('rust');
+    let dia = languages.createDiagnosticCollection('rust');
+    lintCache = new LintCache(dia);
+    // TODO: make lintcache disposable
     context.subscriptions.push(dia);
 
     // Add autocomplete
@@ -100,21 +96,29 @@ export function activate(context: ExtensionContext) {
     // registered commands, eg. 'rust.run'
     if ((window.activeTextEditor && window.activeTextEditor.document.languageId === "rust")) {
         runLinter(window.activeTextEditor.document.fileName);
-        hasRunLinterOnce = true;
-    } else if (workspaceIsCargoProject()) {
-        runLinter(path.join(workspace.rootPath, "Cargo.toml"));
-        hasRunLinterOnce = true;
+    } else {
+        let crateRoot = findWorkspaceCrateRoot();
+        if (crateRoot) {
+            runLinter(path.join(crateRoot, "Cargo.toml"));
+        }
     }
 
     // ===== Register commands =====
 
-    context.subscriptions.push(commands.registerTextEditorCommand('cogs.run', () => {
+    context.subscriptions.push(commands.registerTextEditorCommand('cogs.test', () => {
         let srcpath = child_process.execSync("echo $RUST_SRC_PATH");
         window.showInformationMessage("RUST_SRC_PATH: "+srcpath);
         //window.showInformationMessage('unimplemented!();');
     }));
 
-    context.subscriptions.push(commands.registerTextEditorCommand('cogs.runLinter', (editor, edit) => {
+    context.subscriptions.push(commands.registerTextEditorCommand('cogs.run', 
+    (editor, edit) => {
+        console.log("CMD: cogs.run");
+        runOrBuild(editor.document.fileName);
+    }))
+
+    context.subscriptions.push(commands.registerTextEditorCommand('cogs.runLinter', 
+    (editor, edit) => {
         console.log("CMD: cogs.runLinter");
         runLinter(editor.document.fileName);
     }));
@@ -140,24 +144,19 @@ export function activate(context: ExtensionContext) {
             // TODO: Check if any tabs are still open. hideBar if not
             return;
         }
+        let crateRoot = findWorkspaceCrateRoot();
         if (editor.document.languageId === "rust") {
             showBar("CAT: Language Id is Rust");
             //window.showInformationMessage("Switched to rust document: '" + editor.document.fileName + "'");
-            if (!hasRunLinterOnce) {
+            if (!lintCache.hasLintsForWorkspace(crateRoot)) {
                 runLinter(editor.document.fileName);
-                hasRunLinterOnce = true;
-            } else if ( // This is an unlinted example document
-                isExample(editor.document.fileName) && 
-                (dia.get(editor.document.uri) === undefined)
-            ) {
-                console.log("Linting unlinted example document");
-                runLinter(editor.document.fileName);
+            } else {
+                runLinterIfUnlinted(editor.document.fileName);
             }
         } else {
-            if (workspaceIsCargoProject()) {
-                if (!hasRunLinterOnce) {
+            if (crateRoot) {
+                if (!lintCache.hasLintsForWorkspace(crateRoot)) {
                     runLinter(editor.document.fileName);
-                    hasRunLinterOnce = true;
                 }
                 showBar("CAT: Workspace is Rust");
             } else {

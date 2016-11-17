@@ -27,11 +27,15 @@
         "commands": [
             {
                 "command": "cogs.runLinter",
-                "title": "Rust: Run linter"
+                "title": "Rust: Lint current file/project"
             },
             {
                 "command": "cogs.run",
-                "title": "Rust: Run or build the current file"
+                "title": "Rust: Run/build the current file/project"
+            },
+            {
+                "command": "cogs.test",
+                "title": "Rust: TEST COGS"
             }
         ],
         "keybindings": [
@@ -39,6 +43,12 @@
                 "key": "ctrl+shift+l",
                 "mac": "cmd+shift+l",
                 "command": "cogs.runLinter",
+                "when": "editorLangId == 'rust'"
+            },
+            {
+                "key": "ctrl+shift+r",
+                "mac": "cmd+shift+r",
+                "command": "cogs.run",
                 "when": "editorLangId == 'rust'"
             }
         ],

@@ -2,76 +2,103 @@ import * as vscode from "vscode";
 import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import {getProjectTargets, findCrateRoot, Target, TargetKind} from './common';
+import {getProjectTargets, findCrateRoot, findTargetForFile, Target, TargetKind} from './common';
 import {Range, Position, Diagnostic, DiagnosticCollection, DiagnosticSeverity, Uri} from 'vscode';
 
-// Note: This function doesn't clear the diagnostics, but just adds the ones for the
-// Current file. 
-export function runLinterForExample(example: string, projectDir: string, dia: DiagnosticCollection) {
-    let stdoutput: string;
-    try {
-        //console.log("Running linter in dir: '"+projectDir+"'");
-        let cmd = `cargo rustc --example ${example} --message-format json -- -Zno-trans`;
-        console.log(`Linter: RUN: '${cmd}'`);
-        stdoutput = child_process.execSync(cmd, {cwd: projectDir}).toString("utf-8");
-    } catch (e) {
-        //vscode.window.showInformationMessage("Linter failed: " + e);
-        stdoutput = e.stdout.toString("utf-8");
+interface WSLintCache {
+    // Files whose lints were updated last time a 'lib' target was built
+    lastLibTargetFiles: string[];
+    // If the project doesn't have a lib target it can't really use examples/tests
+    // so this structure should be okay.
+
+    // Targets that have already been linted and thus needn't be relinted on open
+    otherLintedTargets: Set<string>;
+}
+
+export class LintCache {
+    workspaces: Map<string, WSLintCache>;
+    dia: DiagnosticCollection;
+
+    constructor(dia: DiagnosticCollection) {
+        this.workspaces = new Map();
+        this.dia = dia;
     }
-    //console.log("Stdout:\n"+stdoutput);
-    let map = parseDiagnosticsFromJsonLines(stdoutput, projectDir);
-    
-    // Don't clear the diagnostics, just add the diagnostic for the example.
-    map.forEach((diagnostics, filepath) => {
-        //console.log("Setting the diagnostics for file: '"+filepath+"'");
-        dia.set(Uri.file(filepath), diagnostics);
-    });
-}
 
-// Creates a cargo command to run to lint the given target.
-export function getTargetLintCommand(target: Target): string {
-    let cmd = "cargo rustc --message-format json";
-    if (target.kind == TargetKind.Library) {
-        cmd += " --lib";
-    } else if (target.kind === TargetKind.Binary) {
-        cmd += " --bin " + target.name;
-    } else if (target.kind === TargetKind.Example) {
-        cmd += " --example " + target.name;
+    updateTarget(target: Target, lints: Map<string, Diagnostic[]>) {
+        let cache = this.getOrInsertWorkspace(target.crateRoot);
+        switch (target.kind) {
+            case TargetKind.Library: {
+                for (let filePath of cache.lastLibTargetFiles) {
+                    this.dia.delete(Uri.file(filePath));
+                }
+                // Clear the array in a roundabout way
+                cache.lastLibTargetFiles.length = 0;
+                break;
+            }
+            case TargetKind.Binary:
+            case TargetKind.Example:
+            case TargetKind.Test: {
+                cache.otherLintedTargets.add(target.src_path);
+                break;
+            }
+            default: {
+                console.log("ERR: Unhandled target in 'updateTarget': "+target.kind);
+            }
+        }
+        lints.forEach((diagnostics, filePath) => {
+            this.dia.set(Uri.file(filePath), diagnostics);
+            if (target.kind === TargetKind.Library) {
+                cache.lastLibTargetFiles.push(filePath);
+            }
+        });
     }
-    cmd += " -- -Zno-trans";
-    return cmd;
+
+    hasLintsForTarget(target: Target): boolean {
+        if (!this.workspaces.has(target.crateRoot)) {
+            return false;
+        }
+        let cache = this.workspaces.get(target.crateRoot);
+        return cache.otherLintedTargets.has(target.src_path);
+    }
+
+    hasLintsForFile(filePath: string): boolean {
+        let crateRoot = findCrateRoot(filePath);
+        if (!this.workspaces.has(crateRoot)) {
+            return false;
+        }
+        let cache = this.workspaces.get(crateRoot);
+        return cache.otherLintedTargets.has(filePath);
+    }
+
+    getOrInsertWorkspace(crateRoot): WSLintCache {
+        if (!this.workspaces.has(crateRoot)) {
+            let cache = {lastLibTargetFiles: [], otherLintedTargets: new Set()};
+            this.workspaces.set(crateRoot, cache);
+            return cache;
+        } else {
+            return this.workspaces.get(crateRoot);
+        }
+    }
+
+    hasLintsForWorkspace(crateRoot): boolean {
+        return this.workspaces.has(crateRoot);
+    }
 }
 
-// Runs what amounts to 'cargo check' on the project of the given file.
-export function cargoCheck(projectDir: string): string {
-    let output = ""
-    getProjectTargets(projectDir).forEach(target => {
-        // Don't lint examples on cargo check (yet)
-        if (target.kind == TargetKind.Example) {
-            return;
-        }
-        let cmd = getTargetLintCommand(target);
-        console.log(`Check: RUN >> ${cmd}`)
-        try {
-            output += child_process.execSync(cmd, {cwd: projectDir}).toString("utf-8");
-        } catch (e) {
-            output += e.stdout.toString("utf-8");
-        }
-    });
-    return output;
-}
-
-export function runLinterForProject(projectDir: string, dia: DiagnosticCollection) {
+export function runLinterForTarget(target: Target, cache: LintCache) {
     // execSync raises an error on statusCode != 0, and naturally rustc errors.
-    let output = cargoCheck(projectDir);
+    let cmd = "cargo rustc --message-format json" + target.cargo_args() + " -- -Zno-trans";
+    console.log(`Linter: RUN >> ${cmd}`);
+    let output;
+    try {
+        output = child_process.execSync(cmd, {cwd: target.crateRoot}).toString("utf-8");
+    } catch (e) {
+        output = e.stdout.toString("utf-8");
+    }
 
-    let map = parseDiagnosticsFromJsonLines(output, projectDir);
+    let lints = parseDiagnosticsFromJsonLines(output, target.crateRoot);
     
-    dia.clear();
-    map.forEach((diagnostics, filepath) => {
-        //console.log("Setting the diagnostics for file: '"+filepath+"'");
-        dia.set(Uri.file(filepath), diagnostics);
-    });
+    cache.updateTarget(target, lints);
 }
 
 function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<string, Diagnostic[]> {
@@ -171,22 +198,3 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
     });
     return map;
 }
-
-/*function onChange() {
-  let uri = document.uri;
-  check(uri.fsPath, goConfig).then(errors => {
-    diagnosticCollection.clear();
-    let diagnosticMap: Map<string, vscode.Diagnostic[]> = new Map();
-    errors.forEach(error => {
-      let canonicalFile = vscode.Uri.file(error.file).toString();
-      let range = new vscode.Range(error.line-1, error.startColumn, error.line-1, error.endColumn);
-      let diagnostics = diagnosticMap.get(canonicalFile);
-      if (!diagnostics) { diagnostics = []; }
-      diagnostics.push(new vscode.Diagnostic(range, error.msg, error.severity));
-      diagnosticMap.set(canonicalFile, diagnostics);
-    });
-    diagnosticMap.forEach((diags, file) => {
-      diagnosticCollection.set(vscode.Uri.parse(file), diags);
-    });
-  })
-}*/
