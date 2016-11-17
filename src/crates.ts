@@ -12,6 +12,7 @@ export class Crate {
 
     constructor(root: string, dia: DiagnosticCollection) {
         this.root = root;
+        // NOTE: This uses the right user shell for me on Mac. Is that universal?
         let terminal = window.createTerminal("Rust: "+path.basename(root));
         let cdCmd = "cd "+root;
         terminal.sendText(cdCmd, true);

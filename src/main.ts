@@ -1,7 +1,7 @@
 'use strict';
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticCollection, TextEditor, TextEditorEdit, DocumentFilter, Terminal} from 'vscode';
+import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticSeverity, DiagnosticCollection, TextEditor, TextEditorEdit, DocumentFilter, Terminal, TextEditorRevealType, Selection} from 'vscode';
 //import * as cap from './capabilities';
 import {runLinterForTarget, LintCache} from './linter';
 import {Settings} from './settings';
@@ -12,10 +12,12 @@ import * as fs from 'fs';
 import {findCrateRoot, findTarget, TargetKind} from './common';
 import {runOrBuild} from './run';
 import {CrateManager} from './crates';
+import {LintStatusHelper} from './fancyLint';
 
 let bar: StatusBarItem;
 let settings: Settings;
 let manager: CrateManager;
+let lintStatus: LintStatusHelper;
 
 const RUST_MODE: DocumentFilter = {language: 'rust', scheme: 'file'};
 
@@ -25,6 +27,7 @@ export function runLinter(filePath: string) {
         let target = findTarget(filePath, false);
         runLinterForTarget(target, manager);
         updateLastLintTime();
+        lintStatus.updateStatus(filePath);
     } else {
         window.showErrorMessage(`No cargo project found for file '${filePath}'`);
     }
@@ -36,6 +39,8 @@ export function runLinterIfUnlinted(filePath: string) {
         if ((target.kind !== TargetKind.Library) && 
         (!manager.hasLintsForTarget(target))) {
             runLinterForTarget(target, manager); // TODO: reuse target
+            updateLastLintTime();
+            lintStatus.updateStatus(filePath);
         }
     } else {
         window.showErrorMessage(`No cargo project found for file '${filePath}'`);
@@ -47,13 +52,13 @@ export function isCargoFile(doc: TextDocument): boolean {
 }
 
 function hideBar(message: string) {
-    console.log(message + " -> hide");
+    //console.log(message + " -> hide");
     //window.showInformationMessage("Bar hidden!");
     bar.hide();
 }
 
 function showBar(message: string) {
-    console.log(message + " -> show");
+    //console.log(message + " -> show");
     //window.showInformationMessage("Bar shown!");
     bar.show();
 }
@@ -66,16 +71,18 @@ function updateLastLintTime() {
     bar.text = `$(rocket) Linted at ${hours}:${minutes}:${seconds}`;
 }
 
+
+
 // your extension is activated the very first time the command is executed
 export function activate(context: ExtensionContext) {
     
     // ===== Setup =====
 
-    bar = window.createStatusBarItem(StatusBarAlignment.Left);
+    bar = window.createStatusBarItem(StatusBarAlignment.Left, 1);
     const defaultBarText = "$(rocket) Cogs Activated";
     bar.text = defaultBarText;
     showBar("Activate!");
-
+    context.subscriptions.push(bar);
     
 
     // Create a new diagnostics collection (lints for each file)
@@ -84,6 +91,9 @@ export function activate(context: ExtensionContext) {
     manager = new CrateManager(dia);
     context.subscriptions.push(manager);
     context.subscriptions.push(dia);
+
+    // Try the not-so-fancy linter extension (yay)
+    lintStatus = new LintStatusHelper(context, dia)
 
     // Add autocomplete
 
