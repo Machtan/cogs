@@ -53,16 +53,18 @@ export function isCargoFile(doc: TextDocument): boolean {
     return path.basename(doc.fileName) === "Cargo.toml";
 }
 
-function hideBar(message: string) {
+function hideBars(message: string) {
     //console.log(message + " -> hide");
     //window.showInformationMessage("Bar hidden!");
     bar.hide();
+    lintStatus.hide();
 }
 
-function showBar(message: string) {
+function showBars(message: string) {
     //console.log(message + " -> show");
     //window.showInformationMessage("Bar shown!");
     bar.show();
+    lintStatus.show();
 }
 
 function updateLastLintTime() {
@@ -80,13 +82,6 @@ export function activate(context: ExtensionContext) {
     
     // ===== Setup =====
 
-    bar = window.createStatusBarItem(StatusBarAlignment.Left, 1);
-    const defaultBarText = "$(rocket) Cogs Activated";
-    bar.text = defaultBarText;
-    showBar("Activate!");
-    context.subscriptions.push(bar);
-    
-
     // Create a new diagnostics collection (lints for each file)
     let dia = languages.createDiagnosticCollection('rust');
     settings = new Settings();
@@ -96,6 +91,12 @@ export function activate(context: ExtensionContext) {
 
     // Try the not-so-fancy linter extension (yay)
     lintStatus = new LintStatusBar(context, dia)
+    bar = window.createStatusBarItem(StatusBarAlignment.Left, 1);
+    const defaultBarText = "$(rocket) Cogs Activated";
+    bar.text = defaultBarText;
+    context.subscriptions.push(bar);
+    
+    showBars("Activate!"); // INVARIANT: both bars have been initialized here
 
     // Add autocomplete
 
@@ -103,13 +104,10 @@ export function activate(context: ExtensionContext) {
     // Check if the project should be Linted
     // This might be 'false' if the extension is activated through running one of its
     // registered commands, eg. 'rust.run'
-    if ((window.activeTextEditor && window.activeTextEditor.document.languageId === "rust")) {
+    if (window.activeTextEditor && findCrateRoot(window.activeTextEditor.document.fileName)) {
         runLinter(window.activeTextEditor.document.fileName);
     } else {
-        let crateRoot = findCrateRoot(workspace.rootPath);
-        if (crateRoot) {
-            runLinter(path.join(crateRoot, "Cargo.toml"));
-        }
+        hideBars("Activate: Not in rust project");
     }
 
     // ===== Register commands =====
@@ -128,7 +126,7 @@ export function activate(context: ExtensionContext) {
             let terminal = manager.getTerminal(crateRoot);
             runOrBuild(editor.document.fileName, terminal);
         }
-    }))
+    }));
 
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.runLinter', 
     (editor, edit) => {
@@ -166,13 +164,15 @@ export function activate(context: ExtensionContext) {
             // TODO: Check if any tabs are still open. hideBar if not
             return;
         }
+        console.log(`CAT: '${editor.document.fileName}'`);
         let crateRoot = findCrateRoot(editor.document.fileName);
+        console.log(`CAT: Crate root: '${crateRoot}'`);
         if (!crateRoot) {
-            hideBar("CAT: Crate root not found");
+            hideBars("CAT: Crate root not found");
             lintStatus.updateStatus(editor.document.fileName);
             return;
         }
-        showBar("CAT: Crate root found");
+        showBars("CAT: Crate root found");
         if (!manager.hasCrateBeenLinted(crateRoot)) {
             console.log("CAT: Linting crate for first time: "+path.basename(crateRoot));
             runLinter(editor.document.fileName);

@@ -34,6 +34,7 @@ export class LintStatusBar {
         this.bar.show();
     }
 
+    // Updates the data for the crate that contains the given path, if necessary
     updateCrateLintsIfNew(filePath: string) {
         let crateRoot = findCrateRoot(filePath);
         if (crateRoot !== this.crate.root) {
@@ -42,13 +43,14 @@ export class LintStatusBar {
         this.updateText();
     }
 
+    // Forcefully updates the data for the crate that contains the given path.
     updateCrateLints(filePath: string) {
         let crateRoot = findCrateRoot(filePath);
         console.log("CRATE => "+path.basename(crateRoot));
         let errors = 0;
         let warnings = 0;
         this.dia.forEach((uri, diagnostics) => {
-            console.log(`'${uri.fsPath}' startsWith '${crateRoot}' -> ${uri.fsPath.startsWith(crateRoot)}`);
+            //console.log(`'${uri.fsPath}' startsWith '${crateRoot}' -> ${uri.fsPath.startsWith(crateRoot)}`);
             if (uri.fsPath.startsWith(crateRoot)) {
                 diagnostics.forEach(diagnostic => {
                     if (diagnostic.severity === DiagnosticSeverity.Error) {
@@ -63,6 +65,7 @@ export class LintStatusBar {
         this.updateStatus(filePath);
     }
 
+    // Recalculates the shown status text.
     updateText() {
         // Hack to somehow fix the fact that the crate count is wrong immediately after
         // linting a member file :/
@@ -76,6 +79,7 @@ export class LintStatusBar {
         console.log(`STATUS: Updating text => '${this.bar.text}'`);
     }
 
+    // Updates the status shown for a newly changed-to document.
     updateStatus(filePath: string) {
         this.updateCrateLintsIfNew(filePath);
         let diagnostics = this.dia.get(Uri.file(filePath));
@@ -95,6 +99,17 @@ export class LintStatusBar {
         }
     }
 
+    // Hides the lint status bar
+    hide() {
+        this.bar.hide();
+    }
+
+    // Shows the lint status bar
+    show() {
+        this.bar.show();
+    }
+
+    // Shows a list of linted files with errors and warnings to choose between and go to
     showErrorFiles() {
         let picks = [];
         this.dia.forEach((uri, diagnostics) => {

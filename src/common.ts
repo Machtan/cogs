@@ -176,12 +176,14 @@ export function findCrateRoot(memberFilePath: string): string {
         return memberFilePath;
     }
     // Support build.rs
+    let lastDir = memberFilePath;
     let dir = path.dirname(memberFilePath);
-    while (dir != "") {
+    while (dir != lastDir) {
         if (fs.existsSync(path.join(dir, "Cargo.toml"))) {
             crateRoots.push(dir);
             return dir;
         }
+        lastDir = dir;
         dir = path.dirname(dir);
     }
     filesWithNoCrate.add(memberFilePath);
