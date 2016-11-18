@@ -1,9 +1,14 @@
 import * as path from 'path';
 import {findCrateRoot} from './common';
-import {window, workspace, commands, DiagnosticCollection, DiagnosticSeverity, StatusBarItem, ExtensionContext, StatusBarAlignment, Uri, Selection} from 'vscode';
+import {window, workspace, commands, Diagnostic, DiagnosticCollection, DiagnosticSeverity, StatusBarItem, ExtensionContext, StatusBarAlignment, Uri, Selection, Position, Range} from 'vscode';
 
 class CrateLints {
     constructor(public root: string, public errors: number, public warnings: number) {}
+}
+
+interface LintSource {
+    diagnostic: Diagnostic,
+    filePath: string,
 }
 
 export class LintStatusBar {
@@ -12,14 +17,17 @@ export class LintStatusBar {
     crate: CrateLints;
     errors: number;
     warnings: number;
+    currentFilePath: string;
 
     // Initializes the bar and its crap.
     constructor(context: ExtensionContext, dia: DiagnosticCollection) {
         this.errors = 0;
         this.warnings = 0;
         this.dia = dia;
+        this.currentFilePath = "";
         context.subscriptions.push(commands.registerCommand('fancyLint.showFiles', () => {
-            this.showErrorFiles();
+            //this.showErrorFiles();
+            this.gotoNextCrateLint();
         }));
         this.bar = window.createStatusBarItem(StatusBarAlignment.Left, 2);
         this.bar.command = "fancyLint.showFiles";
@@ -36,6 +44,7 @@ export class LintStatusBar {
 
     // Updates the data for the crate that contains the given path, if necessary
     updateCrateLintsIfNew(filePath: string) {
+        this.currentFilePath = filePath;
         let crateRoot = findCrateRoot(filePath);
         if (crateRoot !== this.crate.root) {
             this.updateCrateLints(filePath);
@@ -45,6 +54,7 @@ export class LintStatusBar {
 
     // Forcefully updates the data for the crate that contains the given path.
     updateCrateLints(filePath: string) {
+        this.currentFilePath = filePath;
         let crateRoot = findCrateRoot(filePath);
         console.log("CRATE => "+path.basename(crateRoot));
         let errors = 0;
@@ -109,11 +119,80 @@ export class LintStatusBar {
         this.bar.show();
     }
 
+    gotoFileAndPos(filePath: string, range: Range) {
+        workspace.openTextDocument(filePath as string).then(document => {
+            window.showTextDocument(document).then(editor => {
+                editor.revealRange(range);//, TextEditorRevealType.InCenter);
+                //editor.selection = new Selection(range.start, range.start);
+            })
+        });
+    }
+
+    gotoNextCrateLint() {
+        if ((this.crate.errors + this.crate.warnings) == 0) {
+            return;
+        }
+        let sel = window.activeTextEditor.selection.start;
+        let [ownLints, lints] = this.getCrateLints();
+        //console.log(`GOTO: ownLints: ${ownLints.length}, Lints: ${lints.length}`);
+        if (ownLints.length === 0 && lints.length === 0) {
+            console.log("Could not find any lints!");
+            return;
+        }
+        for (let lint of ownLints) {
+            if (lint.diagnostic.range.start > sel) {
+                this.gotoFileAndPos(lint.filePath, lint.diagnostic.range);
+                return;
+            }
+        }
+        // Push the own lints to the back if they aren't applicable in the beginning
+        let lint = lints.concat(ownLints).pop();
+        this.gotoFileAndPos(lint.filePath, lint.diagnostic.range);
+    }
+
+    getCrateLints(): LintSource[][] {
+        let ownLints = [];
+        //console.log(`STATUS: Looking for lints for current file '${this.currentFilePath}'`)
+        if (this.dia.has(Uri.file(this.currentFilePath))) {
+            //console.log("STATUS: collection has diagnostics for the file");
+            ownLints = ownLints.concat(this.dia.get(Uri.file(this.currentFilePath)).map(val => ({
+                diagnostic: val,
+                filePath: this.currentFilePath,
+            })));
+        }
+        let errors = [];
+        let warnings = [];
+
+        this.dia.forEach((uri, diagnostics) => {
+            if (diagnostics.length === 0) {
+                return;
+            }
+            // Show only the files in the current crate.
+            if (!uri.fsPath.startsWith(this.crate.root) || 
+                uri.fsPath === this.currentFilePath) {
+                return;
+            }
+            for (let diagnostic of diagnostics) {
+                if (diagnostic.severity === DiagnosticSeverity.Error) {
+                    errors.push({diagnostic: diagnostic, filePath: uri.fsPath});
+                } else if (diagnostic.severity === DiagnosticSeverity.Warning) {
+                    warnings.push({diagnostic: diagnostic, filePath: uri.fsPath});
+                }
+            }
+        });
+
+        return [ownLints, errors.concat(warnings)];
+    }
+
     // Shows a list of linted files with errors and warnings to choose between and go to
     showErrorFiles() {
         let picks = [];
         this.dia.forEach((uri, diagnostics) => {
             if (diagnostics.length === 0) {
+                return;
+            }
+            // Show only the files in the current crate.
+            if (!uri.fsPath.startsWith(this.crate.root)) {
                 return;
             }
             let errors = 0;
