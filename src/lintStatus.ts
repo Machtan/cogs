@@ -140,10 +140,14 @@ export class LintStatusBar {
         if ((this.crate.errors + this.crate.warnings) == 0) {
             return;
         }
-        let index = (this.currentShownLintIndex + 1 % this.crate.lints.length);
+        let index = (this.currentShownLintIndex + 1) % this.crate.lints.length;
         //console.log(`Old/new index: (${this.currentShownLintIndex}, ${index})`);
         this.currentShownLintIndex = index;
         let lint = this.crate.lints[index];
+        if (lint === undefined) {
+            window.showErrorMessage(`No lint: index: ${index} (lints: ${this.crate.lints.length})`);
+            return;
+        }
         //console.log("Lints: "+this.crate.lints);
         this.gotoFileAndPos(lint.filePath, lint.diagnostic.range);
     }
