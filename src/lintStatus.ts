@@ -107,9 +107,9 @@ export class LintStatusBar {
         this.warnings = 0;
         if (diagnostics !== undefined) {
             diagnostics.forEach(diagnostic => {
-                if (diagnostic.severity = DiagnosticSeverity.Error) {
+                if (diagnostic.severity === DiagnosticSeverity.Error) {
                     this.errors += 1;
-                } else if (diagnostic.severity = DiagnosticSeverity.Warning) {
+                } else if (diagnostic.severity === DiagnosticSeverity.Warning) {
                     this.warnings += 1;
                 }
             });
