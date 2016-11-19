@@ -172,16 +172,18 @@ export function findCrateRoot(memberFilePath: string): string {
     if (fs.existsSync(path.join(memberFilePath, "Cargo.toml"))) {
         // NOTE: The path.sep is very important to avoid partial matches like
         // rsdl2_image/* getting the root of rsdl2.
-        crateRoots.push(memberFilePath + path.sep);
-        return memberFilePath;
+        let crateRoot = memberFilePath + path.sep;
+        crateRoots.push(crateRoot);
+        return crateRoot;
     }
     // Support build.rs
     let lastDir = memberFilePath;
     let dir = path.dirname(memberFilePath);
     while (dir != lastDir) {
         if (fs.existsSync(path.join(dir, "Cargo.toml"))) {
-            crateRoots.push(dir);
-            return dir;
+            let crateRoot = dir + path.sep;
+            crateRoots.push(crateRoot);
+            return crateRoot;
         }
         lastDir = dir;
         dir = path.dirname(dir);

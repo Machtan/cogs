@@ -169,7 +169,7 @@ export function activate(context: ExtensionContext) {
         console.log(`CAT: Crate root: '${crateRoot}'`);
         if (!crateRoot) {
             hideBars("CAT: Crate root not found");
-            lintStatus.updateStatus(editor.document.fileName);
+            lintStatus.updateCurrentFile(editor.document.fileName);
             return;
         }
         showBars("CAT: Crate root found");
@@ -182,7 +182,7 @@ export function activate(context: ExtensionContext) {
             console.log("CAT: Linting if unlinted: "+path.basename(editor.document.fileName));
             runLinterIfUnlinted(editor.document.fileName);
         }
-        lintStatus.updateStatus(editor.document.fileName);
+        lintStatus.updateCurrentFile(editor.document.fileName);
     }));
 
     context.subscriptions.push(workspace.onDidChangeConfiguration(e => {
