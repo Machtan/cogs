@@ -33,7 +33,7 @@ export class LintStatusBar {
         }));
         this.bar = window.createStatusBarItem(StatusBarAlignment.Left, 2);
         this.bar.command = "fancyLint.showFiles";
-        this.bar.tooltip = "Reveal next problem";
+        this.bar.tooltip = "No problems to reveal";
         this.crate = new CrateLints("", [], 0, 0);
         context.subscriptions.push(this.bar);
         if (window.activeTextEditor) {
@@ -89,6 +89,11 @@ export class LintStatusBar {
     updateText() {
         this.bar.text = `$(package) ${path.basename(this.crate.root)}: $(circle-slash) ${this.errors}/${this.crate.errors} $(alert) ${this.warnings}/${this.crate.warnings}`;
         console.log(`STATUS: Updating text => '${this.bar.text}'`);
+        if (this.crate.errors !== 0 || this.crate.warnings !== 0) {
+            this.bar.tooltip = "Reveal next problem";
+        } else {
+            this.bar.tooltip = "No problems to reveal";
+        }
     }
 
     // Updates the status shown for a newly changed-to document.
