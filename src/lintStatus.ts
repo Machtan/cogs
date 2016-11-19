@@ -87,15 +87,7 @@ export class LintStatusBar {
 
     // Recalculates the shown status text.
     updateText() {
-        // Hack to somehow fix the fact that the crate count is wrong immediately after
-        // linting a member file :/
-        /*if (this.errors > this.crate.errors) {
-            this.crate.errors = this.errors;
-        }
-        if (this.warnings >this.crate.warnings) {
-            this.crate.warnings = this.warnings;
-        }*/
-        this.bar.text = `$(circle-slash) ${this.errors}/${this.crate.errors} $(alert) ${this.warnings}/${this.crate.warnings}`;
+        this.bar.text = `$(package) ${path.basename(this.crate.root)}: $(circle-slash) ${this.errors}/${this.crate.errors} $(alert) ${this.warnings}/${this.crate.warnings}`;
         console.log(`STATUS: Updating text => '${this.bar.text}'`);
     }
 

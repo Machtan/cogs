@@ -39,6 +39,8 @@ export class LintCache {
             case TargetKind.Binary:
             case TargetKind.Example:
             case TargetKind.Test: {
+                // TODO: Is this *enough* files to clear?
+                this.dia.delete(Uri.file(target.src_path));
                 this.otherLintedTargets.add(target.src_path);
                 break;
             }
