@@ -2,10 +2,32 @@ import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import {findCrateRoot} from './common';
-import {window, CompletionItemProvider, TextDocument, Position, CancellationToken, CompletionItem, CompletionList} from 'vscode';
+import {window, CompletionItemProvider, TextDocument, Position, CancellationToken, CompletionItem, CompletionList, DocumentSymbolProvider, DocumentHighlight, SymbolInformation} from 'vscode';
 
 function isValidCompletionSource(path: string): boolean {
     return true;
+}
+
+/*export class RacerDefinitionProvider implements DefinitionProvider {
+    provideDefinition(document: TextDocument, position: Position, token: CancellationToken): Definition | Definition[] {
+
+    }
+}*/
+
+type ProviderResult<T> =  T | undefined | null | Thenable<T | undefined | null>;
+
+/*export class RustsymProvider implements DocumentSymbolProvider {
+    provideDocumentSymbols(document: TextDocument, token: CancellationToken): SymbolInformation[] | Thenable<SymbolInformation[]> {
+        let root = findCrateRoot(document.fileName);
+        let cmd = `rustsym -g ${root}`;
+        child_process.execSync(cmd);
+    }
+}*/
+
+export class RacerProvider implements CompletionItemProvider {
+    provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<CompletionItem[] | CompletionList> {
+        return [];
+    }
 }
 
 export function findRacerCompletions(document: TextDocument, position: Position) {

@@ -22,16 +22,16 @@ export class Target {
             case CheckVersion.Official: {
                 switch (this.kind) {
                     case TargetKind.Binary: {
-                        return `cargo check --bin ${this.name} --message-format json`;
+                        return `cargo check --bin '${this.name}' --message-format json`;
                     }
                     case TargetKind.Library: {
                         return `cargo check --lib --message-format json`;
                     }
                     case TargetKind.Example: {
-                        return `cargo check --example ${this.name} --message-format json`;
+                        return `cargo check --example '${this.name}' --message-format json`;
                     }
                     case TargetKind.Test: {
-                        return `cargo check --test ${this.name} --message-format json`;
+                        return `cargo check --test '${this.name}' --message-format json`;
                     }
                 }
             }
@@ -41,16 +41,16 @@ export class Target {
     run_command(): string {
         switch (this.kind) {
             case TargetKind.Binary: {
-                return "cargo run --bin "+this.name;
+                return `cargo run --bin '${this.name}'`;
             }
             case TargetKind.Library: {
                 return "cargo build --lib";
             }
             case TargetKind.Example: {
-                return "cargo run --example "+this.name;
+                return `cargo run --example '${this.name}'`;
             }
             case TargetKind.Test: {
-                return "cargo test --test "+this.name;
+                return `cargo test --test '${this.name}'`;
             }
         }
     }
@@ -58,16 +58,16 @@ export class Target {
     cargo_rustc_args(): string {
         switch (this.kind) {
             case TargetKind.Binary: {
-                return " --bin "+this.name;
+                return ` --bin '${this.name}'`;
             }
             case TargetKind.Library: {
                 return " --lib ";
             }
             case TargetKind.Example: {
-                return " --example "+this.name;
+                return ` --example '${this.name}'`;
             }
             case TargetKind.Test: {
-                return " --test "+this.name;
+                return ` --test '${this.name}'`;
             }
         }
     }
