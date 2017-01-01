@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import {findProjectTargets, findCrateRoot, findTargetForFile, Target, TargetKind} from './common';
 import {Range, Position, Diagnostic, DiagnosticCollection, DiagnosticSeverity, Uri} from 'vscode';
 import {CrateManager} from './crates';
+import {Profile} from './profile';
 
 
 export class LintCache {
@@ -65,9 +66,9 @@ export class LintCache {
     }
 }
 
-export function runLinterForTarget(target: Target, manager: CrateManager) {
+export function runLinterForTarget(target: Target, manager: CrateManager, profile: Profile) {
     // execSync raises an error on statusCode != 0, and naturally rustc errors.
-    let cmd = target.lint_command();
+    let cmd = target.lint_command(profile);
     console.log(`Linter: RUN >> ${cmd}`);
     let output;
     try {
@@ -83,6 +84,9 @@ export function runLinterForTarget(target: Target, manager: CrateManager) {
 
 function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<string, Diagnostic[]> {
     let map: Map<string, Diagnostic[]> = new Map();
+    if (lines === "") {
+        return map;
+    }
     let lineno = 1;
     lines.split("\n").forEach(line => {
         console.log("Linter: Parsing line "+lineno);
@@ -99,6 +103,10 @@ function parseDiagnosticsFromJsonLines(lines: string, projectDir: string): Map<s
         }
         // Note: Use package_id to ensure this is in the current project?
         let tm = tree.message;
+        if (tm === undefined) {
+            console.log("Linter: Got JSON with no 'message' field");
+            return;
+        }
         let level = tm.level;
         let message = tm.message;
         if (message === "aborting due to previous error") {

@@ -39,7 +39,7 @@
             },
             {
                 "command": "cogs.testCogs",
-                "title": "Rust: TEST COGS"
+                "title": "TEST COGS"
             },
             {
                 "command": "cogs.clearLintsForCrate",
@@ -61,6 +61,11 @@
                 "key": "ctrl+shift+c",
                 "mac": "cmd+shift+c",
                 "command": "cogs.clearLintsForCrate"
+            },
+            {
+                "key": "ctrl+shift-t",
+                "mac": "cmd+shift+t",
+                "command": "cogs.testCogs"
             }
         ],
         "configuration": {

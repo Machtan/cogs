@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
+import {Profile, CheckVersion} from "./profile";
 
 export enum TargetKind {
     Binary,
@@ -12,9 +13,29 @@ export enum TargetKind {
 export class Target {
     constructor(public name: string, public kind: TargetKind, public src_path: string, public crateRoot: string) {}
 
-    lint_command(): string {
-        let args = this.cargo_rustc_args();
-        return `cargo rustc --message-format json ${args} -- -Zno-trans`;
+    lint_command(profile: Profile): string {
+        switch (profile.checkVersion) {
+            case CheckVersion.Unofficial: {
+                let args = this.cargo_rustc_args();
+                return `cargo rustc --message-format json ${args} -- -Zno-trans`;
+            }
+            case CheckVersion.Official: {
+                switch (this.kind) {
+                    case TargetKind.Binary: {
+                        return `cargo check --bin ${this.name} --message-format json`;
+                    }
+                    case TargetKind.Library: {
+                        return `cargo check --lib --message-format json`;
+                    }
+                    case TargetKind.Example: {
+                        return `cargo check --example ${this.name} --message-format json`;
+                    }
+                    case TargetKind.Test: {
+                        return `cargo check --test ${this.name} --message-format json`;
+                    }
+                }
+            }
+        }
     }
 
     run_command(): string {

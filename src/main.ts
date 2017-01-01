@@ -4,8 +4,8 @@
 import {window, commands, languages, workspace, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument, DiagnosticSeverity, DiagnosticCollection, TextEditor, TextEditorEdit, DocumentFilter, Terminal, TextEditorRevealType, Selection} from 'vscode';
 //import * as cap from './capabilities';
 import {runLinterForTarget, LintCache} from './linter';
-import {Settings} from './settings';
-import {RustCompleter} from './suggestions';
+import {Profile} from './profile';
+import {RustCompleter, findRacerCompletions} from './suggestions';
 import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -15,17 +15,17 @@ import {CrateManager} from './crates';
 import {LintStatusBar} from './lintStatus';
 
 let bar: StatusBarItem;
-let settings: Settings;
+let profile: Profile;
 let manager: CrateManager;
 let lintStatus: LintStatusBar;
 
 const RUST_MODE: DocumentFilter = {language: 'rust', scheme: 'file'};
 
-export function runLinter(filePath: string) {
+export function runLinter(filePath: string, profile: Profile) {
     //window.showInformationMessage("Filename: "+ editor.document.fileName);
     if (findCrateRoot(filePath)) {
         let target = findTarget(filePath, false);
-        runLinterForTarget(target, manager);
+        runLinterForTarget(target, manager, profile);
         updateLastLintTime();
         lintStatus.updateCrateLints(filePath);
     } else {
@@ -33,14 +33,14 @@ export function runLinter(filePath: string) {
     }
 }
 
-export function runLinterIfUnlinted(filePath: string) {
+export function runLinterIfUnlinted(filePath: string, profile: Profile) {
     if (findCrateRoot(filePath)) {
         let target = findTarget(filePath, false);
         //console.log(`'${filePath}'.target => (target: ${target})`);
         if ((target.kind !== TargetKind.Library) && 
         (!manager.hasLintsForTarget(target))) {
             console.log(`Unlinted('${path.basename(filePath)}') => true`);
-            runLinterForTarget(target, manager); // TODO: reuse target
+            runLinterForTarget(target, manager, profile); // TODO: reuse target
             updateLastLintTime();
             lintStatus.updateCrateLints(filePath);
         }
@@ -84,7 +84,8 @@ export function activate(context: ExtensionContext) {
 
     // Create a new diagnostics collection (lints for each file)
     let dia = languages.createDiagnosticCollection('rust');
-    settings = new Settings();
+    profile = new Profile();
+    console.log("Profile: " + profile.toString());
     manager = new CrateManager(dia);
     context.subscriptions.push(manager);
     context.subscriptions.push(dia);
@@ -99,23 +100,25 @@ export function activate(context: ExtensionContext) {
     showBars("Activate!"); // INVARIANT: both bars have been initialized here
 
     // Add autocomplete
+    //context.subscriptions.push(languages.registerCompletionItemProvider(RUST_MODE, new RustCompleter(), '.', '::'));
 
 
     // Check if the project should be Linted
     // This might be 'false' if the extension is activated through running one of its
     // registered commands, eg. 'rust.run'
     if (window.activeTextEditor && findCrateRoot(window.activeTextEditor.document.fileName)) {
-        runLinter(window.activeTextEditor.document.fileName);
+        runLinter(window.activeTextEditor.document.fileName, profile);
     } else {
         hideBars("Activate: Not in rust project");
     }
 
     // ===== Register commands =====
 
-    context.subscriptions.push(commands.registerTextEditorCommand('cogs.testCogs', () => {
-        let srcpath = child_process.execSync("echo $RUST_SRC_PATH");
-        window.showInformationMessage("RUST_SRC_PATH: "+srcpath);
+    context.subscriptions.push(commands.registerTextEditorCommand('cogs.testCogs', (editor, edit) => {
+        //let srcpath = child_process.execSync("echo $RUST_SRC_PATH");
+        //window.showInformationMessage("RUST_SRC_PATH: "+srcpath);
         //window.showInformationMessage('unimplemented!();');
+        findRacerCompletions(editor.document, editor.selection.start);
     }));
 
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.run', 
@@ -131,7 +134,7 @@ export function activate(context: ExtensionContext) {
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.runLinter', 
     (editor, edit) => {
         console.log("CMD: cogs.runLinter");
-        runLinter(editor.document.fileName);
+        runLinter(editor.document.fileName, profile);
     }));
 
     context.subscriptions.push(commands.registerTextEditorCommand('cogs.clearLintsForCrate', 
@@ -140,6 +143,7 @@ export function activate(context: ExtensionContext) {
         let crateRoot = findCrateRoot(editor.document.fileName);
         if (crateRoot) {
             manager.clearLints(crateRoot);
+            lintStatus.updateCrateLints(editor.document.fileName);
         }
     }));
 
@@ -147,9 +151,9 @@ export function activate(context: ExtensionContext) {
 
     context.subscriptions.push(workspace.onDidSaveTextDocument(document => {
         //window.showInformationMessage("Language ID: '"+document.languageId+"' lint on save: "+settings.runLinterOnSave);
-        if (((document.languageId === "rust") || isCargoFile(document)) && settings.runLinterOnSave) {
+        if (((document.languageId === "rust") || isCargoFile(document)) && profile.runLinterOnSave) {
             //window.showInformationMessage("Saved rust document!");
-            runLinter(document.fileName);
+            runLinter(document.fileName, profile);
         }
     }));
 
@@ -175,18 +179,18 @@ export function activate(context: ExtensionContext) {
         showBars("CAT: Crate root found");
         if (!manager.hasCrateBeenLinted(crateRoot)) {
             console.log("CAT: Linting crate for first time: "+path.basename(crateRoot));
-            runLinter(editor.document.fileName);
+            runLinter(editor.document.fileName, profile);
         }
         if (editor.document.languageId === "rust") {
             // NOTE: This might not be necessary?
             console.log("CAT: Linting if unlinted: "+path.basename(editor.document.fileName));
-            runLinterIfUnlinted(editor.document.fileName);
+            runLinterIfUnlinted(editor.document.fileName, profile);
         }
         lintStatus.updateCurrentFile(editor.document.fileName);
     }));
 
     context.subscriptions.push(workspace.onDidChangeConfiguration(e => {
-        settings.update();
+        profile.updateSettings();
     }))
 
     /*context.subscriptions.push(workspace.onDidChangeTextDocument(event => {

@@ -26,5 +26,7 @@ let path = (rustc --print sysroot)/lib/rustlib/src/rust/src
 
 # Possible todos
 - Symbol provider / auto-completion (`rustsym + racer`?)
+- Support cargo with builtin check (0.16.nightly / something)
+  `cargo 0.16.0-nightly (ddb5c32 2016-12-16)` or later?
 - Make a tool (in rust) to run clippy/check and output JSON (potentially converting human-readable output)
-- Add support for outputting in the new JSON format in rust-clippy
+- Add support for outputting in the new JSON format in rust-clippy?

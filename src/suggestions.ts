@@ -8,6 +8,37 @@ function isValidCompletionSource(path: string): boolean {
     return true;
 }
 
+export function findRacerCompletions(document: TextDocument, position: Position) {
+    let text = document.getText();
+    let command = `racer -i tab-text complete ${position.line+1} ${position.character+1} -`;
+    console.log("RUN >> "+command);
+    let cwd = findCrateRoot(document.fileName);
+    let options = {input: text};
+    if (cwd !== "") {
+        options['cwd'] = cwd;
+    }
+    
+    let output: string;
+    try {
+        output = child_process.execSync(command, options).toString("utf-8");
+    } catch (e) {
+        window.showErrorMessage("Racer failed!");
+        console.log("Racer error. Output:");
+        console.log(e.stdout.toString("utf-8"));
+        return undefined;
+    }
+    console.log("RACER output:\n"+output);
+    let completions = [];
+    output.split("\n").forEach(line => {
+        let [otype, mstr, linenum, charnum, path, mtype, context] = line.split("\t");
+        if (otype === "MATCH") {
+            if (!isValidCompletionSource(path)) {
+                return;
+            }
+        }
+    });
+}
+
 export class RustCompleter implements CompletionItemProvider {
     provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken): CompletionItem[] | Thenable<CompletionItem[]> | CompletionList | Thenable<CompletionList> {
         let text = document.getText();
@@ -23,6 +54,7 @@ export class RustCompleter implements CompletionItemProvider {
             console.log(e.stdout.toString("utf-8"));
             return undefined;
         }
+        console.log("RACER output:\n"+output);
         let completions = [];
         output.split("\n").forEach(line => {
             let [otype, mstr, linenum, charnum, path, mtype, context] = line.split("\t");
@@ -32,6 +64,6 @@ export class RustCompleter implements CompletionItemProvider {
                 }
             }
         });
-        return undefined;
+        return completions;
     }
 }
